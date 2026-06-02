@@ -36,7 +36,24 @@ export const useStore = create<StoreState>()(
       }),
 
       updateInvoice: (id, updates) => set((state) => {
-        const newInvoices = state.invoices.map((inv) => inv.id === id ? { ...inv, ...updates, updatedAt: new Date().toISOString() } : inv);
+        const newInvoices = state.invoices.map((inv) => {
+          if (inv.id === id) {
+            return {
+              ...inv,
+              ...updates,
+              displaySettings: {
+                ...(inv.displaySettings || {
+                  showLogo: true, showFrom: true, showBilledTo: true,
+                  showIssueDate: true, showDueDate: true, showDiscount: true,
+                  showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
+                }),
+                ...(updates.displaySettings || {})
+              },
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return inv;
+        });
         return {
           invoices: newInvoices,
           history: { past: [...state.history.past, state.invoices].slice(-20), future: [] }

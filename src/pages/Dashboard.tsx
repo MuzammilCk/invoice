@@ -34,6 +34,11 @@ export function Dashboard() {
       templateId,
       themeColor: '#6366f1',
       currency: 'USD',
+      displaySettings: {
+        showLogo: true, showFrom: true, showBilledTo: true,
+        showIssueDate: true, showDueDate: true, showDiscount: true,
+        showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
+      }
     };
     addInvoice(newInvoice);
     navigate(`/editor/${newInvoice.id}`);
@@ -76,6 +81,11 @@ export function Dashboard() {
           templateId: 'minimal-executive',
           themeColor: '#4f46e5',
           currency: 'USD',
+          displaySettings: {
+            showLogo: true, showFrom: true, showBilledTo: true,
+            showIssueDate: true, showDueDate: true, showDiscount: true,
+            showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
+          }
         };
         addInvoice(newInvoice);
         navigate(`/editor/${newInvoice.id}`);

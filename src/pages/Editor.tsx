@@ -4,7 +4,7 @@ import { AIAssistantSidebar } from '../components/AIAssistantSidebar';
 import { EditableInvoice } from '../components/EditableInvoice';
 import { useStore } from '../store/useStore';
 import { TEMPLATES } from '../lib/templates';
-import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2 } from 'lucide-react';
+import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Invoice } from '../types';
 
@@ -141,13 +141,13 @@ export function Editor() {
              </select>
            </div>
            
-           <div className="space-y-3 flex flex-col">
-             <div className="flex justify-between items-center">
-               <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Accent Color</span>
-               <input type="color" className="w-6 h-6 rounded border-0 bg-transparent cursor-pointer" value={invoice.themeColor} onChange={(e) => updateInvoice(invoice.id, { themeColor: e.target.value })} title="Custom Color" />
+           <div className="space-y-3">
+             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Accent Color</span>
+             <div className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50">
+               <span className="text-sm text-zinc-300">Custom Color</span>
+               <input type="color" className="w-8 h-8 rounded border-0 bg-transparent cursor-pointer" value={invoice.themeColor} onChange={(e) => updateInvoice(invoice.id, { themeColor: e.target.value })} title="Custom Color" />
              </div>
-             
-             <div className="grid grid-cols-5 gap-2 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50 object-cover">
+             <div className="grid grid-cols-5 gap-2 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50">
                {['#4f46e5', '#059669', '#ea580c', '#e11d48', '#7c3aed', '#0f172a', '#2563eb', '#16a34a', '#d97706', '#be123c'].map(color => (
                  <button 
                    key={color}
@@ -158,6 +158,50 @@ export function Editor() {
                     {invoice.themeColor === color && <CheckCircle2 className="w-4 h-4 text-white drop-shadow-md" />}
                  </button>
                ))}
+             </div>
+           </div>
+
+           <div className="space-y-3">
+             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><LayoutTemplate className="w-4 h-4 text-indigo-400" /> Document Modules</span>
+             <div className="bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50 divide-y divide-zinc-800/50 shadow-inner">
+               {(function() {
+                 const currentSettings = invoice.displaySettings || {
+                   showLogo: true, showFrom: true, showBilledTo: true,
+                   showIssueDate: true, showDueDate: true, showDiscount: true,
+                   showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
+                 };
+                 return [
+                   { key: 'showLogo', label: 'Company Logo' },
+                   { key: 'showFrom', label: 'From Address' },
+                   { key: 'showBilledTo', label: 'Billed To Address' },
+                   { key: 'showIssueDate', label: 'Issue Date' },
+                   { key: 'showDueDate', label: 'Due Date' },
+                   { key: 'showDiscount', label: 'Discount Row' },
+                   { key: 'showTax', label: 'Tax Row' },
+                   { key: 'showShipping', label: 'Shipping Row' },
+                   { key: 'showNotes', label: 'Notes & Terms' },
+                   { key: 'showPaymentMethods', label: 'Payment Box' },
+                 ].map((module) => (
+                   <div key={module.key} className="flex justify-between items-center p-3 hover:bg-zinc-800/20 transition-colors">
+                     <span className="text-sm text-zinc-300 pointer-events-none">{module.label}</span>
+                     <button 
+                       onClick={() => updateInvoice(invoice.id, { 
+                         displaySettings: { 
+                           ...currentSettings, 
+                           [module.key]: !currentSettings[module.key as keyof typeof currentSettings] 
+                         } 
+                       })}
+                       className={`w-10 h-5 rounded-full relative transition-colors ${currentSettings[module.key as keyof typeof currentSettings] ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                     >
+                       <motion.div 
+                         layout
+                         className="w-4 h-4 bg-white rounded-full absolute top-0.5 shadow border border-black/10"
+                         style={{ left: currentSettings[module.key as keyof typeof currentSettings] ? 'calc(100% - 1.125rem)' : '0.125rem' }}
+                       />
+                     </button>
+                   </div>
+                 ));
+               })()}
              </div>
            </div>
            

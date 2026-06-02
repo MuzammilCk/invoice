@@ -19,6 +19,19 @@ export interface BusinessInfo {
 
 export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue';
 
+export interface DisplaySettings {
+  showLogo: boolean;
+  showFrom: boolean;
+  showBilledTo: boolean;
+  showIssueDate: boolean;
+  showDueDate: boolean;
+  showDiscount: boolean;
+  showTax: boolean;
+  showShipping: boolean;
+  showNotes: boolean;
+  showPaymentMethods: boolean;
+}
+
 export interface Invoice {
   id: string;
   title: string;
@@ -38,5 +51,6 @@ export interface Invoice {
   templateId: string;
   themeColor: string;
   currency: string;
+  displaySettings: DisplaySettings;
 }
 
