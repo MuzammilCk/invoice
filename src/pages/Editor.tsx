@@ -80,11 +80,11 @@ export function Editor() {
 
         <div className="flex-1 overflow-auto bg-zinc-950 relative p-8 custom-scrollbar pt-12" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
           {/* Floating Zoom Controls */}
-          <div className="fixed bottom-16 right-80 mr-8 flex items-center bg-zinc-800/90 backdrop-blur-sm rounded-full p-1 border border-zinc-700 shadow-2xl z-20 print:hidden hidden md:flex">
+          <div className="fixed bottom-16 right-[340px] flex items-center bg-zinc-800 backdrop-blur-md rounded-full p-1.5 border border-zinc-700 shadow-2xl z-[100] print:hidden hidden md:flex">
              <button onClick={() => setZoom(Math.max(0.3, zoom - 0.1))} className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-700 transition-colors">
                <ZoomOut className="w-4 h-4" />
              </button>
-             <span className="text-[11px] font-mono w-14 text-center text-zinc-300 font-medium">{Math.round(zoom * 100)}%</span>
+             <span className="text-[11px] font-mono w-14 text-center text-zinc-200 font-bold">{Math.round(zoom * 100)}%</span>
              <button onClick={() => setZoom(Math.min(2, zoom + 0.1))} className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-700 transition-colors">
                <ZoomIn className="w-4 h-4" />
              </button>
@@ -98,9 +98,9 @@ export function Editor() {
             style={{ 
               transform: `scale(${zoom})`, 
               transformOrigin: 'top center',
-              marginBottom: `-${(1 - zoom) * 297}mm`,
-              marginRight: `-${(1 - zoom) * 210}mm`, 
-              marginLeft: `-${(1 - zoom) * 210}mm`
+              marginBottom: `${(zoom - 1) * 297}mm`,
+              marginRight: `${(zoom - 1) * 105}mm`, 
+              marginLeft: `${(zoom - 1) * 105}mm`
             }}
             ref={printRef}
           >

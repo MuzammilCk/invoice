@@ -110,16 +110,16 @@ export const SortableInvoiceTable = ({ items, currency, updateItems, Input }: an
 
   return (
     <div className="flex-1 w-full relative">
-      <table className="w-full text-left table-fixed">
-        <thead>
-          <tr className="border-b border-slate-200">
-            <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Description</th>
-            <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[15%]">Qty</th>
-            <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[20%]">Rate</th>
-            <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[20%] pr-2">Amount</th>
-          </tr>
-        </thead>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <table className="w-full text-left table-fixed">
+          <thead>
+            <tr className="border-b border-slate-200">
+              <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Description</th>
+              <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[15%]">Qty</th>
+              <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[20%]">Rate</th>
+              <th className="py-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 text-right w-[20%] pr-2">Amount</th>
+            </tr>
+          </thead>
           <SortableContext items={items.map((i: any) => i.id)} strategy={verticalListSortingStrategy}>
             <tbody className="text-sm">
               {items.map((item: any, index: number) => (
@@ -127,8 +127,8 @@ export const SortableInvoiceTable = ({ items, currency, updateItems, Input }: an
               ))}
             </tbody>
           </SortableContext>
-        </DndContext>
-      </table>
+        </table>
+      </DndContext>
       <button onClick={addItem} className="mt-4 text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity print:hidden">
         + Add Line Item
       </button>
