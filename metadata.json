@@ -1,0 +1,6 @@
+{
+  "name": "AI Invoice Studio",
+  "description": "Enterprise-grade AI-first billing, invoicing, and quotation platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
