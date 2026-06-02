@@ -2,7 +2,7 @@ import React from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { Invoice } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { calculateSubtotal, calculateTax, calculateTotal } from '../lib/calculations';
+import { computeInvoiceTotals } from '../lib/calculations';
 import { TEMPLATES } from '../lib/templates';
 import { SortableInvoiceTable } from './SortableInvoiceTable';
 import { AnimatePresence, motion } from 'motion/react';
@@ -29,19 +29,11 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
     showIssueDate: true, showDueDate: true, showDiscount: true,
     showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
   };
-  const subtotal = calculateSubtotal(invoice.items);
+
+  // Issue 4.1 + 4.2: Single centralized calculation — no inline reimplementation
+  const totals = computeInvoiceTotals(invoice);
   
-  const actualDiscountRate = settings.showDiscount ? (invoice.discountRate || 0) : 0;
-  const discountAmount = subtotal * actualDiscountRate / 100;
-  
-  const taxableAmount = subtotal - discountAmount;
-  const actualTaxRate = settings.showTax ? invoice.taxRate : 0;
-  const tax = calculateTax(taxableAmount, actualTaxRate);
-  
-  const actualShipping = settings.showShipping ? (invoice.shipping || 0) : 0;
-  const total = calculateTotal(subtotal, tax, discountAmount, actualShipping);
-  
-  const activeTemplate = TEMPLATES.find(t => t.id === invoice.templateId) || TEMPLATES[0];
+  const activeTemplate = TEMPLATES.find(t => t.id === invoice.templateId) ?? TEMPLATES[0]!;
 
   const updateBusinessInfo = (field: string, value: string) => {
     updateInvoice({ businessInfo: { ...invoice.businessInfo, [field]: value } });
@@ -76,7 +68,8 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
          <div className="absolute top-0 left-0 w-full h-4" style={{ backgroundColor: invoice.themeColor }}></div>
       )}
       {activeTemplate.styles.accentStyle === 'gradient' && (
-         <div className="absolute top-0 left-0 w-full h-8 bg-gradient-to-r opacity-80" style={{ from: invoice.themeColor, backgroundImage: `linear-gradient(to right, ${invoice.themeColor}, #000000)` }}></div>
+         /* Issue 6.4: Removed invalid `from:` CSS property — only use valid backgroundImage */
+         <div className="absolute top-0 left-0 w-full h-8 opacity-80" style={{ backgroundImage: `linear-gradient(135deg, ${invoice.themeColor} 0%, rgba(0,0,0,0.85) 100%)` }}></div>
       )}
 
       <div className="h-full flex flex-col pt-4">
@@ -105,7 +98,8 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
                 <motion.div key="invoiceId" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
                   <div className="flex items-center gap-2 mt-2 text-slate-500 bg-slate-50 p-2 rounded w-max">
                     <span className="text-xs font-bold uppercase tracking-wider">#</span>
-                    <Input value={invoice.id} onChange={(e: any) => updateInvoice({ id: e.target.value })} className="text-sm font-mono font-medium" />
+                    {/* Issue 2.1: Bind to invoiceNumber (display), NOT id (internal PK) */}
+                    <Input value={invoice.invoiceNumber} onChange={(e: any) => updateInvoice({ invoiceNumber: e.target.value })} className="text-sm font-mono font-medium" />
                   </div>
                   <HideButton settingKey="showInvoiceId" />
                 </motion.div>
@@ -196,7 +190,7 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
           <div className="w-72 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <div className="flex justify-between text-sm items-center pb-2 border-b border-slate-200">
               <span className="text-slate-500 font-medium">Subtotal</span>
-              <span className="font-semibold">{formatCurrency(subtotal, invoice.currency)}</span>
+              <span className="font-semibold">{formatCurrency(totals.subtotal, invoice.currency)}</span>
             </div>
             <AnimatePresence>
               {settings.showDiscount && (
@@ -205,14 +199,14 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
                     <span className="cursor-pointer group-hover:text-slate-800 transition-colors">Discount</span> 
                     <Input type="number" value={invoice.discountRate || 0} onChange={(e: any) => updateInvoice({ discountRate: Number(e.target.value) })} className="w-16 text-right bg-white border border-slate-200" />%
                   </span>
-                  <span className="text-red-500">-{formatCurrency(discountAmount, invoice.currency)}</span>
+                  <span className="text-red-500">-{formatCurrency(totals.discountAmount, invoice.currency)}</span>
                   <HideButton settingKey="showDiscount" />
                 </motion.div>
               )}
               {settings.showTax && (
                 <motion.div key="tax" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 relative group/section overflow-hidden">
                   <span className="text-slate-500 flex items-center gap-1 font-medium">Tax <Input type="number" value={invoice.taxRate} onChange={(e: any) => updateInvoice({ taxRate: Number(e.target.value) })} className="w-16 text-right bg-white border border-slate-200" />%</span>
-                  <span className="font-medium">{formatCurrency(tax, invoice.currency)}</span>
+                  <span className="font-medium">{formatCurrency(totals.taxAmount, invoice.currency)}</span>
                   <HideButton settingKey="showTax" />
                 </motion.div>
               )}
@@ -231,7 +225,7 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
             </AnimatePresence>
             <div className={`flex justify-between pt-3 items-baseline ${!settings.showShipping ? 'border-t border-slate-200' : ''}`}>
               <span className="text-base font-bold text-slate-800 uppercase tracking-widest">Total Due</span>
-              <span className="text-3xl font-bold" style={{ color: invoice.themeColor }}>{formatCurrency(total, invoice.currency)}</span>
+              <span className="text-3xl font-bold" style={{ color: invoice.themeColor }}>{formatCurrency(totals.grandTotal, invoice.currency)}</span>
             </div>
           </div>
         </div>

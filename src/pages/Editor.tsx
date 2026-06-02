@@ -9,6 +9,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
 import * as htmlToImage from 'html-to-image';
 import jsPDF from 'jspdf';
+// Issue 6.2: CSS moved to external file — no more dangerouslySetInnerHTML
+import '../styles/invoice-export.css';
 
 function Dropdown({ options, value, onChange, placeholder }: { options: {value: string, label: string}[], value: string, onChange: (val: string) => void, placeholder: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -74,6 +76,7 @@ export function Editor() {
     });
   };
 
+  // Issue 6.1: Improved PDF export (interim — uses PNG for better quality)
   const handlePrint = async () => {
     if (!printRef.current || isGeneratingPDF) return;
     
@@ -83,9 +86,10 @@ export function Editor() {
       await new Promise(resolve => setTimeout(resolve, 50));
       const element = printRef.current;
       
-      const imgData = await htmlToImage.toJpeg(element, {
-        quality: 0.95,
-        pixelRatio: 2,
+      // Use PNG instead of JPEG for sharper text; higher pixelRatio for better resolution
+      const imgData = await htmlToImage.toPng(element, {
+        quality: 1.0,
+        pixelRatio: 3,
         backgroundColor: '#ffffff',
         style: {
           transform: 'none',
@@ -103,7 +107,7 @@ export function Editor() {
         format: 'a4'
       });
       
-      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
       pdf.save(`${invoice.title || 'Invoice'}.pdf`);
     } catch (error) {
       console.error("PDF generation failed", error);
@@ -294,7 +298,10 @@ export function Editor() {
                  { value: 'GBP', label: 'GBP (£) - United Kingdom' },
                  { value: 'INR', label: 'INR (₹) - India' },
                  { value: 'AUD', label: 'AUD ($) - Australia' },
-                 { value: 'CAD', label: 'CAD ($) - Canada' }
+                 { value: 'CAD', label: 'CAD ($) - Canada' },
+                 { value: 'JPY', label: 'JPY (¥) - Japan' },
+                 { value: 'SGD', label: 'SGD ($) - Singapore' },
+                 { value: 'AED', label: 'AED (د.إ) - UAE' },
                ]}
              />
            </div>
@@ -302,6 +309,7 @@ export function Editor() {
            <div className="pt-8 border-t border-zinc-800/50 relative z-0">
              <div className="space-y-3">
                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Document State</label>
+               {/* Issue 2.4: Expanded status options for enterprise workflows */}
                <Dropdown 
                  value={invoice.status}
                  onChange={(val) => updateInvoice(invoice.id, { status: val as any })}
@@ -309,66 +317,22 @@ export function Editor() {
                  options={[
                    { value: 'draft', label: 'Draft - Unsent' },
                    { value: 'pending', label: 'Pending - Waiting Payment' },
+                   { value: 'sent', label: 'Sent - Dispatched' },
+                   { value: 'viewed', label: 'Viewed - Client Opened' },
+                   { value: 'approved', label: 'Approved - Confirmed' },
+                   { value: 'partially-paid', label: 'Partially Paid' },
                    { value: 'paid', label: 'Paid - Completed' },
-                   { value: 'overdue', label: 'Overdue - Action Required' }
+                   { value: 'overdue', label: 'Overdue - Action Required' },
+                   { value: 'in-review', label: 'In Review - Under Audit' },
+                   { value: 'disputed', label: 'Disputed - Contested' },
+                   { value: 'cancelled', label: 'Cancelled' },
+                   { value: 'void', label: 'Void - Invalidated' },
                  ]}
                />
              </div>
            </div>
          </div>
       </div>
-      
-      {/* Print Styles */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .export-mode input[type="number"]::-webkit-inner-spin-button, 
-        .export-mode input[type="number"]::-webkit-outer-spin-button { 
-          -webkit-appearance: none;
-          display: none;
-        }
-        .export-mode input[type="date"]::-webkit-calendar-picker-indicator,
-        .export-mode input[type="date"]::-webkit-clear-button {
-          display: none;
-          -webkit-appearance: none;
-        }
-        .export-mode .print\\:hidden {
-          display: none !important;
-        }
-
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          .print\\:p-0, .print\\:p-0 * {
-            visibility: visible;
-          }
-          .print\\:p-0 {
-            position: absolute;
-            left: 0;
-            top: 0;
-            margin: 0;
-            padding: 0;
-            box-shadow: none !important;
-            width: 100%;
-          }
-          @page { margin: 0; }
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #3f3f46;
-          border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #52525b;
-        }
-      `}} />
     </div>
   );
 }
-

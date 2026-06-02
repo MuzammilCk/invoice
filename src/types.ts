@@ -17,7 +17,30 @@ export interface BusinessInfo {
   taxId: string;
 }
 
-export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue';
+// Issue 2.4: Expanded InvoiceStatus for enterprise workflows
+export type InvoiceStatus =
+  | 'draft'
+  | 'pending'
+  | 'sent'
+  | 'viewed'
+  | 'partially-paid'
+  | 'paid'
+  | 'overdue'
+  | 'disputed'
+  | 'in-review'
+  | 'approved'
+  | 'cancelled'
+  | 'void';
+
+// Issue 2.5: Validated currency codes
+export const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'AUD', 'CAD', 'JPY', 'SGD', 'AED'] as const;
+export type CurrencyCode = typeof SUPPORTED_CURRENCIES[number];
+
+// Issue 2.6: Payment terms
+export type PaymentTerms = 'net-7' | 'net-15' | 'net-30' | 'net-60' | 'due-on-receipt' | 'custom';
+
+// Issue 2.3: Proper discount types
+export type DiscountType = 'percentage' | 'flat';
 
 export interface DisplaySettings {
   showTitle: boolean;
@@ -35,7 +58,8 @@ export interface DisplaySettings {
 }
 
 export interface Invoice {
-  id: string;
+  id: string;                    // Issue 2.1: Internal UUID — NOT user-editable
+  invoiceNumber: string;         // Issue 2.1: User-editable display field (e.g. "INV-2024-0042")
   title: string;
   status: InvoiceStatus;
   createdAt: string;
@@ -46,13 +70,15 @@ export interface Invoice {
   customerInfo: CustomerInfo;
   items: InvoiceItem[];
   taxRate: number;
-  discountContent?: string;
+  discountType?: DiscountType;   // Issue 2.3: Replaced discountContent
   discountRate?: number;
+  discountLabel?: string;        // Issue 2.3: Optional display label
   shipping?: number;
   notes: string;
   templateId: string;
   themeColor: string;
-  currency: string;
+  currency: string;              // Kept as string for backward compat; new invoices use CurrencyCode
+  paymentTerms?: PaymentTerms;   // Issue 2.6
+  customPaymentTerms?: string;   // Issue 2.6: Used when paymentTerms === 'custom'
   displaySettings: DisplaySettings;
 }
-

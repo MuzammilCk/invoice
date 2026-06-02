@@ -2,14 +2,25 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, Settings, FileText, Bot } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useStore } from '../store/useStore';
 
 export function SidebarNav() {
+  const { businessInfo } = useStore();
+
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/clients', icon: Users, label: 'Clients' },
     { to: '/templates', icon: FileText, label: 'Templates' },
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];
+
+  // Issue 6.5: Generate deterministic initials from business name — no external CDN call
+  const initials = businessInfo.name
+    ?.split(' ')
+    .map(w => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() ?? 'U';
 
   return (
     <aside className="w-20 flex flex-col items-center py-8 border-r border-zinc-800 bg-zinc-900/50 flex-shrink-0 z-20 h-screen">
@@ -37,8 +48,9 @@ export function SidebarNav() {
         <button className="p-3 text-zinc-500 hover:text-indigo-400 transition-colors">
           <Bot className="w-6 h-6 stroke-[1.5]" />
         </button>
-        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 overflow-hidden">
-          <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=Felix`} alt="User" />
+        {/* Issue 6.5: Initials-based avatar — no external CDN request, works offline */}
+        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-indigo-500/50">
+          {initials}
         </div>
       </div>
     </aside>

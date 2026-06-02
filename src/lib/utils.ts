@@ -5,8 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Issue 6.3: Cryptographically secure UUID v4 — replaces Math.random()
 export function generateId(): string {
-  return Math.random().toString(36).substring(2, 9);
+  return crypto.randomUUID();
 }
 
 export function formatCurrency(amount: number, currency: string = 'USD'): string {

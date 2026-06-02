@@ -4,10 +4,45 @@ import { Invoice } from '../types';
 import { generateId } from '../lib/utils';
 import { Send, FileText, CheckCircle2, Sparkles, Languages, Bot, Mic, Square } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { z } from 'zod';
 
 interface AIFormProps {
   onGenerate: (data: Partial<Invoice>) => void;
 }
+
+// Issue 5.3: Zod schema for validating AI responses
+const AIResponseSchema = z.object({
+  customerInfo: z.object({
+    name: z.string().max(200),
+    email: z.string().max(200),
+    address: z.string().max(500),
+  }).optional(),
+  items: z.array(z.object({
+    description: z.string().max(500),
+    quantity: z.number().positive().max(100_000),
+    rate: z.number().min(0).max(1_000_000),
+  })).min(1).max(100),
+  taxRate: z.number().min(0).max(100).optional().default(0),
+  notes: z.string().max(2000).optional().default(''),
+});
+
+// Issue 5.2: Strip PII before sending to Gemini
+function stripPII(invoice: Invoice): object {
+  return {
+    items: invoice.items.map(i => ({
+      description: i.description,
+      quantity: i.quantity,
+      rate: i.rate,
+    })),
+    taxRate: invoice.taxRate,
+    currency: invoice.currency,
+    notes: invoice.notes,
+    // NO customerInfo, NO businessInfo, NO id
+  };
+}
+
+// Issue 7.6: Max prompt length
+const MAX_PROMPT_LENGTH = 1500;
 
 export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const { id } = useParams();
@@ -25,19 +60,22 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const audioChunksRef = useRef<Blob[]>([]);
 
   const handleGenerate = async () => {
-    if (!prompt.trim()) return;
+    if (!prompt.trim() || !invoice) return;
     
     setIsGenerating(true);
     setError('');
 
     try {
-      const response = await fetch('/api/generate-invoice', {
+      // Issue 5.2: Only send structural data, not PII
+      const invoiceContext = stripPII(invoice);
+
+      const response = await fetch('/api/v1/generate-invoice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          prompt: `Current invoice state: ${JSON.stringify(invoice)}. User request: ${prompt}. Modify the invoice based on this request and return the complete updated schema.` 
+          prompt: `Current invoice items and settings: ${JSON.stringify(invoiceContext)}. User request: ${prompt}. Return only the updated items/taxRate/notes — do NOT return customer or business fields.` 
         }),
       });
 
@@ -48,14 +86,23 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
 
       const data = await response.json();
       
+      // Issue 5.3: Validate AI response with Zod
+      const parsed = AIResponseSchema.safeParse(data);
+      if (!parsed.success) {
+        console.error('AI response validation failed:', parsed.error);
+        setError('AI returned invalid data. Please try rephrasing your request.');
+        return;
+      }
+
+      const validData = parsed.data;
       const mappedData: Partial<Invoice> = {
-        customerInfo: data.customerInfo,
-        items: data.items.map((item: any) => ({
+        customerInfo: validData.customerInfo || undefined,
+        items: validData.items.map((item) => ({
           ...item,
           id: generateId()
         })),
-        taxRate: data.taxRate || 0,
-        notes: data.notes || '',
+        taxRate: validData.taxRate,
+        notes: validData.notes,
       };
 
       onGenerate(mappedData);
@@ -101,14 +148,18 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   };
 
   const handleAudioGenerate = async (audioBlob: Blob) => {
+    if (!invoice) return;
     setIsGenerating(true);
     setError('');
     try {
+      // Issue 5.2: Strip PII from audio prompt context
+      const invoiceContext = stripPII(invoice);
+
       const formData = new FormData();
       formData.append('audio', audioBlob);
-      formData.append('prompt', `Current invoice state: ${JSON.stringify(invoice)}. The user is dictating instructions to update this invoice. Process the audio, apply the updates, and return the complete new JSON schema.`);
+      formData.append('prompt', `Current invoice items and settings: ${JSON.stringify(invoiceContext)}. The user is dictating instructions to update this invoice. Process the audio, apply the updates, and return the JSON schema. Do NOT include customer or business info.`);
       
-      const response = await fetch('/api/audio-to-invoice', {
+      const response = await fetch('/api/v1/audio-to-invoice', {
         method: 'POST',
         body: formData
       });
@@ -119,14 +170,24 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       }
 
       const data = await response.json();
+
+      // Issue 5.3: Validate AI response
+      const parsed = AIResponseSchema.safeParse(data);
+      if (!parsed.success) {
+        console.error('AI audio response validation failed:', parsed.error);
+        setError('AI returned invalid data from audio. Please try again.');
+        return;
+      }
+
+      const validData = parsed.data;
       const mappedData: Partial<Invoice> = {
-        customerInfo: data.customerInfo,
-        items: data.items.map((item: any) => ({
+        customerInfo: validData.customerInfo || undefined,
+        items: validData.items.map((item) => ({
           ...item,
           id: generateId()
         })),
-        taxRate: data.taxRate || 0,
-        notes: data.notes || '',
+        taxRate: validData.taxRate,
+        notes: validData.notes,
       };
 
       onGenerate(mappedData);
@@ -161,7 +222,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     setError('');
     
     try {
-      const response = await fetch('/api/rewrite', {
+      const response = await fetch('/api/v1/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -190,12 +251,17 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
             <Bot className="w-4 h-4 text-indigo-400" /> AI Workbench
           </label>
           <div className="space-y-3">
+            {/* Issue 7.6: maxLength on prompt textarea + character counter */}
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => setPrompt(e.target.value.substring(0, MAX_PROMPT_LENGTH))}
+              maxLength={MAX_PROMPT_LENGTH}
               placeholder="e.g. Add 2 hours for design consulting at 150/hr..."
               className="w-full text-sm bg-zinc-900 border border-zinc-700/50 rounded-xl p-4 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 min-h-[140px] transition-colors shadow-sm"
             />
+            <span className="text-[10px] text-zinc-600 text-right block">
+              {prompt.length}/{MAX_PROMPT_LENGTH}
+            </span>
             {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
             
             <div className="flex gap-2">

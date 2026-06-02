@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { InvoiceItem } from '../types';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, generateId } from '../lib/utils';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2 } from 'lucide-react';
+import { Parser } from 'expr-eval';
+
+// Issue 5.1: Safe math expression parser (replaces new Function() / eval())
+const mathParser = new Parser();
 
 const NumberExpressionInput = ({ value, onChange, className, ...rest }: any) => {
   const [localValue, setLocalValue] = useState(String(value));
@@ -13,13 +17,19 @@ const NumberExpressionInput = ({ value, onChange, className, ...rest }: any) => 
   
   const handleBlur = () => {
     try {
-       if (/^[\d\.\+\-\*\/\s\(\)]+$/.test(localValue)) {
-         const val = new Function('return (' + localValue + ')')();
-         onChange(Number(val) || 0);
-         setLocalValue(String(Number(val) || 0));
-       } else {
-         onChange(Number(localValue) || 0);
-       }
+      // Issue 5.1: Use expr-eval instead of new Function() — no arbitrary code execution
+      if (/^[\d\.+\-\*\/\s\(\)]+$/.test(localValue)) {
+        const result = mathParser.evaluate(localValue);
+        if (typeof result === 'number' && isFinite(result)) {
+          const safeVal = Math.max(0, result);
+          onChange(safeVal);
+          setLocalValue(String(safeVal));
+        } else {
+          onChange(Number(localValue) || 0);
+        }
+      } else {
+        onChange(Number(localValue) || 0);
+      }
     } catch(e) {
       onChange(Number(localValue) || 0);
     }
@@ -104,8 +114,9 @@ export const SortableInvoiceTable = ({ items, currency, updateItems, Input, isEx
     updateItems(items.filter((_: any, i: number) => i !== index));
   };
 
+  // Issue 6.3: Use generateId() instead of Math.random().toString()
   const addItem = () => {
-    updateItems([...items, { id: Math.random().toString(), description: 'New Item', quantity: 1, rate: 0 }]);
+    updateItems([...items, { id: generateId(), description: 'New Item', quantity: 1, rate: 0 }]);
   };
 
   return (

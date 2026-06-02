@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Sparkles, LayoutTemplate, MoreVertical, FileText, CalendarDays, Mic, Type } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { formatDate, formatCurrency, generateId } from '../lib/utils';
+import { computeInvoiceTotals } from '../lib/calculations';
 import { TEMPLATES } from '../lib/templates';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -19,7 +20,8 @@ export function Dashboard() {
 
   const startBlank = (templateId = 'minimal-executive') => {
     const newInvoice = {
-      id: generateId().toUpperCase(),
+      id: generateId(),
+      invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}`,
       title: 'Untitled Document',
       status: 'draft' as const,
       createdAt: new Date().toISOString(),
@@ -52,11 +54,11 @@ export function Dashboard() {
       if (aiMode === 'voice' && audioBlob) {
         const formData = new FormData();
         formData.append('audio', audioBlob, 'voice.webm');
-        const res = await fetch('/api/audio-to-invoice', { method: 'POST', body: formData });
+        const res = await fetch('/api/v1/audio-to-invoice', { method: 'POST', body: formData });
         if (!res.ok) throw new Error('Audio generation failed');
         generatedData = await res.json();
       } else if (aiMode === 'text' && prompt) {
-        const res = await fetch('/api/generate-invoice', { 
+        const res = await fetch('/api/v1/generate-invoice', { 
           method: 'POST', 
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ prompt })
@@ -67,7 +69,8 @@ export function Dashboard() {
 
       if (generatedData) {
         const newInvoice = {
-          id: generateId().toUpperCase(),
+          id: generateId(),
+          invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}`,
           title: 'Generated Invoice',
           status: 'draft' as const,
           createdAt: new Date().toISOString(),
@@ -200,7 +203,7 @@ export function Dashboard() {
                      <div className="flex justify-between items-end pt-4 border-t border-zinc-800/60">
                         <div>
                           <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Value</p>
-                          <p className="font-semibold text-lg text-zinc-200">{formatCurrency(invoice.items.reduce((s, i) => s + (i.rate * i.quantity), 0) * (1 + invoice.taxRate/100), invoice.currency)}</p>
+                          <p className="font-semibold text-lg text-zinc-200">{formatCurrency(computeInvoiceTotals(invoice).grandTotal, invoice.currency)}</p>
                         </div>
                         <div className="text-right text-xs text-zinc-500 flex items-center gap-1.5">
                           <CalendarDays className="w-3.5 h-3.5"/> 

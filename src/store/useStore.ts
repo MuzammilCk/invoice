@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Invoice } from '../types';
 
+// Issue 3.1: Uniform history depth constant
+const MAX_HISTORY_DEPTH = 50;
+
 interface StoreState {
   invoices: Invoice[];
   businessInfo: Invoice['businessInfo'];
@@ -27,11 +30,12 @@ export const useStore = create<StoreState>()(
       },
       history: { past: [], future: [] },
 
+      // Issue 3.1: Uniform history cap applied
       addInvoice: (invoice) => set((state) => {
         const newInvoices = [...state.invoices, invoice];
         return {
           invoices: newInvoices,
-          history: { past: [...state.history.past, state.invoices], future: [] }
+          history: { past: [...state.history.past, state.invoices].slice(-MAX_HISTORY_DEPTH), future: [] }
         };
       }),
 
@@ -57,19 +61,27 @@ export const useStore = create<StoreState>()(
         });
         return {
           invoices: newInvoices,
-          history: { past: [...state.history.past, state.invoices].slice(-20), future: [] }
+          history: { past: [...state.history.past, state.invoices].slice(-MAX_HISTORY_DEPTH), future: [] }
         };
       }),
 
+      // Issue 3.1: History cap applied (was missing)
       deleteInvoice: (id) => set((state) => {
         const newInvoices = state.invoices.filter((inv) => inv.id !== id);
         return {
           invoices: newInvoices,
-          history: { past: [...state.history.past, state.invoices], future: [] }
+          history: { past: [...state.history.past, state.invoices].slice(-MAX_HISTORY_DEPTH), future: [] }
         };
       }),
 
-      updateBusinessInfo: (info) => set({ businessInfo: info }),
+      // Issue 3.2: Now tracks undo history (was a direct set() with no snapshot)
+      updateBusinessInfo: (info) => set((state) => ({
+        businessInfo: info,
+        history: {
+          past: [...state.history.past, state.invoices].slice(-MAX_HISTORY_DEPTH),
+          future: []
+        }
+      })),
 
       undo: () => set((state) => {
         if (state.history.past.length === 0) return state;
@@ -81,18 +93,20 @@ export const useStore = create<StoreState>()(
         };
       }),
 
+      // Issue 3.1: History cap applied on redo
       redo: () => set((state) => {
         if (state.history.future.length === 0) return state;
         const next = state.history.future[0];
         const newFuture = state.history.future.slice(1);
         return {
           invoices: next,
-          history: { past: [...state.history.past, state.invoices], future: newFuture }
+          history: { past: [...state.history.past, state.invoices].slice(-MAX_HISTORY_DEPTH), future: newFuture }
         };
       }),
     }),
     {
-      name: 'invoice-studio-storage',
+      // Issue 3.4: Env-scoped localStorage key
+      name: `invoice-studio-storage-${(import.meta as any).env?.MODE ?? 'production'}`,
       partialize: (state) => ({ invoices: state.invoices, businessInfo: state.businessInfo }), // Don't persist history!
     }
   )

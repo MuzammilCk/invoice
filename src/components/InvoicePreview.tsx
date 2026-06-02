@@ -1,16 +1,16 @@
 import React from 'react';
 import { Invoice } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
-import { calculateSubtotal, calculateTax, calculateTotal } from '../lib/calculations';
+import { computeInvoiceTotals } from '../lib/calculations';
 
 interface InvoicePreviewProps {
   invoice: Invoice;
 }
 
 export function InvoicePreview({ invoice }: InvoicePreviewProps) {
-  const subtotal = calculateSubtotal(invoice.items);
-  const tax = calculateTax(subtotal, invoice.taxRate);
-  const total = calculateTotal(subtotal, tax);
+  // Issue 4.1: Use the SAME centralized calculation as EditableInvoice
+  // Previously this file calculated tax on full subtotal (ignoring discount) — a critical discrepancy
+  const totals = computeInvoiceTotals(invoice);
 
   return (
     <div className="bg-white text-slate-900 shadow-2xl rounded shadow-indigo-500/10 flex flex-col mx-auto" style={{ width: '210mm', minHeight: '297mm', padding: '15mm' }}>
@@ -21,7 +21,8 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
               {invoice.businessInfo.name.charAt(0).toUpperCase()}
             </div>
             <h2 className="text-3xl font-light tracking-tight">Invoice</h2>
-            <p className="text-slate-400 text-xs mt-1">#{invoice.id.toUpperCase()}</p>
+            {/* Issue 2.1: Display invoiceNumber, not internal id */}
+            <p className="text-slate-400 text-xs mt-1">#{(invoice.invoiceNumber || invoice.id).toUpperCase()}</p>
           </div>
           <div className="text-right">
             <div className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Billed To</div>
@@ -67,8 +68,8 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
                 <tr key={item.id || index} className="border-b border-slate-50">
                   <td className="py-4 font-medium">{item.description}</td>
                   <td className="py-4 text-right text-slate-600">{item.quantity}</td>
-                  <td className="py-4 text-right text-slate-600">{formatCurrency(item.rate)}</td>
-                  <td className="py-4 text-right font-semibold">{formatCurrency(item.quantity * item.rate)}</td>
+                  <td className="py-4 text-right text-slate-600">{formatCurrency(item.rate, invoice.currency)}</td>
+                  <td className="py-4 text-right font-semibold">{formatCurrency(item.quantity * item.rate, invoice.currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -79,15 +80,27 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
           <div className="w-64 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Subtotal</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatCurrency(totals.subtotal, invoice.currency)}</span>
             </div>
+            {totals.discountAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Discount ({invoice.discountRate || 0}%)</span>
+                <span className="text-red-500">-{formatCurrency(totals.discountAmount, invoice.currency)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Tax ({invoice.taxRate}%)</span>
-              <span>{formatCurrency(tax)}</span>
+              <span>{formatCurrency(totals.taxAmount, invoice.currency)}</span>
             </div>
+            {totals.shippingAmount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Shipping</span>
+                <span>{formatCurrency(totals.shippingAmount, invoice.currency)}</span>
+              </div>
+            )}
             <div className="flex justify-between pt-4 border-t border-slate-200">
               <span className="text-sm font-bold">Total Due</span>
-              <span className="text-2xl font-bold">{formatCurrency(total)}</span>
+              <span className="text-2xl font-bold">{formatCurrency(totals.grandTotal, invoice.currency)}</span>
             </div>
           </div>
         </div>
