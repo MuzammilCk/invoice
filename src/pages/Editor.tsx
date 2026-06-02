@@ -4,9 +4,11 @@ import { AIAssistantSidebar } from '../components/AIAssistantSidebar';
 import { EditableInvoice } from '../components/EditableInvoice';
 import { useStore } from '../store/useStore';
 import { TEMPLATES } from '../lib/templates';
-import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate } from 'lucide-react';
+import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Invoice } from '../types';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 export function Editor() {
   const { id } = useParams();
@@ -16,6 +18,8 @@ export function Editor() {
   const [zoom, setZoom] = useState(0.8);
   
   const invoice = invoices.find(inv => inv.id === id);
+
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   if (!invoice) {
     return <div className="flex h-screen items-center justify-center text-zinc-400">Invoice not found.</div>;
@@ -31,8 +35,51 @@ export function Editor() {
     });
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    if (!printRef.current || isGeneratingPDF) return;
+    
+    setIsGeneratingPDF(true);
+    const element = printRef.current;
+    
+    // Save previous inline styles
+    const oldTransform = element.style.transform;
+    const oldMarginBottom = element.style.marginBottom;
+    const oldMarginLeft = element.style.marginLeft;
+    const oldMarginRight = element.style.marginRight;
+    
+    // Clear styles temporarily to grab a 1:1 unscaled snapshot
+    element.style.transform = 'none';
+    element.style.marginBottom = '0';
+    element.style.marginLeft = '0';
+    element.style.marginRight = '0';
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2, // Retain high resolution 
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+      pdf.save(`${invoice.title || 'Invoice'}.pdf`);
+    } catch (error) {
+      console.error("PDF generation failed", error);
+    } finally {
+      // Re-apply zoom & offsets
+      element.style.transform = oldTransform;
+      element.style.marginBottom = oldMarginBottom;
+      element.style.marginLeft = oldMarginLeft;
+      element.style.marginRight = oldMarginRight;
+      setIsGeneratingPDF(false);
+    }
   };
 
   return (
@@ -70,10 +117,11 @@ export function Editor() {
             </div>
             <button
               onClick={handlePrint}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10"
+              disabled={isGeneratingPDF}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Printer className="w-3.5 h-3.5" />
-              Export PDF
+              {isGeneratingPDF ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
+              {isGeneratingPDF ? 'Exporting...' : 'Export PDF'}
             </button>
           </div>
         </header>
