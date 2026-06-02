@@ -11,9 +11,18 @@ import { EyeOff, Trash2 } from 'lucide-react';
 interface EditableInvoiceProps {
   invoice: Invoice;
   updateInvoice: (updates: Partial<Invoice>) => void;
+  isExporting?: boolean;
 }
 
-export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps) {
+export const Input = ({ value, onChange, className = '', placeholder = '', multiline = false, ...props }: any) => {
+  const clazz = `bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded px-2 py-1 transition-colors w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 print:border-none print:shadow-none print:ring-0 print:p-0 text-slate-900 resize-none ${className}`;
+  if (multiline) {
+    return <TextareaAutosize value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
+  }
+  return <input value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
+};
+
+export function EditableInvoice({ invoice, updateInvoice, isExporting = false }: EditableInvoiceProps) {
   const settings = invoice.displaySettings || {
     showTitle: true, showInvoiceId: true,
     showLogo: true, showFrom: true, showBilledTo: true,
@@ -46,26 +55,21 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
     updateInvoice({ displaySettings: { ...settings, [key]: value } });
   };
 
-  const Input = ({ value, onChange, className = '', placeholder = '', multiline = false, ...props }: any) => {
-    const clazz = `bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded px-2 py-1 transition-colors w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 print:border-none print:shadow-none print:ring-0 print:p-0 text-slate-900 resize-none ${className}`;
-    if (multiline) {
-      return <TextareaAutosize value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
-    }
-    return <input value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
+  const HideButton = ({ settingKey }: { settingKey: keyof typeof settings }) => {
+    if (isExporting) return null;
+    return (
+      <button 
+        onClick={() => updateSetting(settingKey, false)}
+        className="absolute top-1 right-1 p-1 bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg opacity-0 group-hover/section:opacity-100 transition-all print:hidden shadow-lg z-10"
+        title="Hide Section"
+      >
+        <EyeOff className="w-3.5 h-3.5" />
+      </button>
+    );
   };
 
-  const HideButton = ({ settingKey }: { settingKey: keyof typeof settings }) => (
-    <button 
-      onClick={() => updateSetting(settingKey, false)}
-      className="absolute top-1 right-1 p-1 bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg opacity-0 group-hover/section:opacity-100 transition-all print:hidden shadow-lg z-10"
-      title="Hide Section"
-    >
-      <EyeOff className="w-3.5 h-3.5" />
-    </button>
-  );
-
   return (
-    <div className={`bg-white shadow-2xl overflow-hidden flex flex-col mx-auto transition-all relative group/canvas ${activeTemplate.styles.fontFamily}`} style={{ width: '210mm', minHeight: '297mm', padding: '15mm', borderRadius: activeTemplate.styles.borderRadius, color: activeTemplate.styles.tableStyle === 'modern' ? '#111827' : '#000' }}>
+    <div className={`bg-white shadow-2xl overflow-hidden flex flex-col mx-auto transition-all relative group/canvas ${activeTemplate.styles.fontFamily} ${isExporting ? 'export-mode' : ''}`} style={{ width: '210mm', minHeight: '297mm', padding: '15mm', borderRadius: activeTemplate.styles.borderRadius, color: activeTemplate.styles.tableStyle === 'modern' ? '#111827' : '#000' }}>
       
       {/* Template Color Accents */}
       {activeTemplate.styles.accentStyle === 'solid' && (
@@ -113,14 +117,16 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             {activeTemplate.styles.headerLayout === 'split' && (
               <AnimatePresence>
                {settings.showFrom && (
-                 <motion.div key="from-split" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-left w-44 relative group/section overflow-hidden">
-                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">From</div>
-                   <Input value={invoice.businessInfo.name} onChange={(e: any) => updateBusinessInfo('name', e.target.value)} className="text-sm font-semibold" placeholder="Your Business Name" />
-                   <Input value={invoice.businessInfo.address} onChange={(e: any) => updateBusinessInfo('address', e.target.value)} multiline className="text-xs text-slate-500 mt-1" placeholder="Your Address" />
-                   <div className="flex items-center text-[10px] mt-1 text-slate-500">
-                     <Input value={invoice.businessInfo.taxId} onChange={(e: any) => updateBusinessInfo('taxId', e.target.value)} placeholder="Tax ID" />
+                 <motion.div key="from-split" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="overflow-hidden">
+                   <div className="text-left w-44 relative group/section">
+                     <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">From</div>
+                     <Input value={invoice.businessInfo.name} onChange={(e: any) => updateBusinessInfo('name', e.target.value)} className="text-sm font-semibold" placeholder="Your Business Name" />
+                     <Input value={invoice.businessInfo.address} onChange={(e: any) => updateBusinessInfo('address', e.target.value)} multiline className="text-xs text-slate-500 mt-1" placeholder="Your Address" />
+                     <div className="flex items-center text-[10px] mt-1 text-slate-500">
+                       <Input value={invoice.businessInfo.taxId} onChange={(e: any) => updateBusinessInfo('taxId', e.target.value)} placeholder="Tax ID" />
+                     </div>
+                     <HideButton settingKey="showFrom" />
                    </div>
-                   <HideButton settingKey="showFrom" />
                  </motion.div>
                )}
               </AnimatePresence>
@@ -128,12 +134,14 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             
             <AnimatePresence>
               {settings.showBilledTo && (
-                <motion.div key="billed-to" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-44 relative group/section overflow-hidden`}>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Billed To</div>
-                  <Input value={invoice.customerInfo.name} onChange={(e: any) => updateCustomerInfo('name', e.target.value)} className={`text-base font-bold ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Name" />
-                  <Input value={invoice.customerInfo.address} onChange={(e: any) => updateCustomerInfo('address', e.target.value)} multiline className={`text-xs text-slate-500 mt-1 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Address" />
-                  <Input value={invoice.customerInfo.email} onChange={(e: any) => updateCustomerInfo('email', e.target.value)} className={`text-xs text-slate-500 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Email" />
-                  <HideButton settingKey="showBilledTo" />
+                <motion.div key="billed-to" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="overflow-hidden">
+                  <div className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-44 relative group/section`}>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Billed To</div>
+                    <Input value={invoice.customerInfo.name} onChange={(e: any) => updateCustomerInfo('name', e.target.value)} className={`text-base font-bold ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Name" />
+                    <Input value={invoice.customerInfo.address} onChange={(e: any) => updateCustomerInfo('address', e.target.value)} multiline className={`text-xs text-slate-500 mt-1 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Address" />
+                    <Input value={invoice.customerInfo.email} onChange={(e: any) => updateCustomerInfo('email', e.target.value)} className={`text-xs text-slate-500 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Email" />
+                    <HideButton settingKey="showBilledTo" />
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -159,17 +167,21 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             <div className="flex gap-8">
               <AnimatePresence>
                 {settings.showIssueDate && (
-                  <motion.div key="issue" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Issue Date</p>
-                    <Input type="date" value={invoice.issueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ issueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
-                    <HideButton settingKey="showIssueDate" />
+                  <motion.div key="issue" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="overflow-hidden">
+                    <div className="w-32 relative group/section">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Issue Date</p>
+                      <Input type="date" value={invoice.issueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ issueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
+                      <HideButton settingKey="showIssueDate" />
+                    </div>
                   </motion.div>
                 )}
                 {settings.showDueDate && (
-                  <motion.div key="due" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Due Date</p>
-                    <Input type="date" value={invoice.dueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ dueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
-                    <HideButton settingKey="showDueDate" />
+                  <motion.div key="due" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="overflow-hidden">
+                    <div className="w-32 relative group/section">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Due Date</p>
+                      <Input type="date" value={invoice.dueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ dueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
+                      <HideButton settingKey="showDueDate" />
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -178,7 +190,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
         )}
 
         {/* Dynamic Drag-and-Drop Table component! */}
-        <SortableInvoiceTable items={invoice.items} currency={invoice.currency} updateItems={(newItems: any) => updateInvoice({ items: newItems })} Input={Input} />
+        <SortableInvoiceTable items={invoice.items} currency={invoice.currency} updateItems={(newItems: any) => updateInvoice({ items: newItems })} Input={Input} isExporting={isExporting} />
 
         <div className="mt-8 flex justify-end">
           <div className="w-72 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-100">

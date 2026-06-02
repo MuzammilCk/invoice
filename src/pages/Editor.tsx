@@ -80,38 +80,21 @@ export function Editor() {
     setIsGeneratingPDF(true);
 
     try {
-      // 1. Create off-screen wrapper node to ensure perfect dimensions irrespective of current viewport/zoom
-      const tempWrapper = document.createElement('div');
-      tempWrapper.style.position = 'absolute';
-      tempWrapper.style.top = '-9999px';
-      tempWrapper.style.left = '-9999px';
-      tempWrapper.style.width = '210mm';
-      tempWrapper.style.minHeight = '297mm';
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const element = printRef.current;
       
-      const elementClone = printRef.current.cloneNode(true) as HTMLElement;
-      
-      // Preserve the values of form elements
-      const originalInputs = printRef.current.querySelectorAll('input') as NodeListOf<HTMLInputElement>;
-      const clonedInputs = elementClone.querySelectorAll('input') as NodeListOf<HTMLInputElement>;
-      originalInputs.forEach((input, i) => { if (clonedInputs[i]) { clonedInputs[i].value = input.value; if (input.type === 'checked') clonedInputs[i].checked = input.checked; } });
-      
-      const originalTextareas = printRef.current.querySelectorAll('textarea') as NodeListOf<HTMLTextAreaElement>;
-      const clonedTextareas = elementClone.querySelectorAll('textarea') as NodeListOf<HTMLTextAreaElement>;
-      originalTextareas.forEach((ta, i) => { if (clonedTextareas[i]) clonedTextareas[i].value = ta.value; });
-
-      const originalSelects = printRef.current.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
-      const clonedSelects = elementClone.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
-      originalSelects.forEach((select, i) => { if (clonedSelects[i]) clonedSelects[i].value = select.value; });
-
-      // Strip motion styling if any
-      elementClone.style.transform = 'none';
-
-      tempWrapper.appendChild(elementClone);
-      document.body.appendChild(tempWrapper);
-
-      const imgData = await htmlToImage.toPng(tempWrapper, {
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff'
+      const imgData = await htmlToImage.toJpeg(element, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        style: {
+          transform: 'none',
+          width: '210mm',
+          minHeight: '297mm',
+          margin: '0',
+          padding: '0',
+          boxShadow: 'none'
+        }
       });
       
       const pdf = new jsPDF({
@@ -120,10 +103,8 @@ export function Editor() {
         format: 'a4'
       });
       
-      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
+      pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
       pdf.save(`${invoice.title || 'Invoice'}.pdf`);
-      
-      tempWrapper.remove();
     } catch (error) {
       console.error("PDF generation failed", error);
     } finally {
@@ -199,6 +180,7 @@ export function Editor() {
                 <EditableInvoice 
                   invoice={invoice} 
                   updateInvoice={(updates) => updateInvoice(invoice.id, updates)} 
+                  isExporting={isGeneratingPDF}
                 />
               </motion.div>
             </div>
@@ -338,6 +320,20 @@ export function Editor() {
       
       {/* Print Styles */}
       <style dangerouslySetInnerHTML={{__html: `
+        .export-mode input[type="number"]::-webkit-inner-spin-button, 
+        .export-mode input[type="number"]::-webkit-outer-spin-button { 
+          -webkit-appearance: none;
+          display: none;
+        }
+        .export-mode input[type="date"]::-webkit-calendar-picker-indicator,
+        .export-mode input[type="date"]::-webkit-clear-button {
+          display: none;
+          -webkit-appearance: none;
+        }
+        .export-mode .print\\:hidden {
+          display: none !important;
+        }
+
         @media print {
           body * {
             visibility: hidden;

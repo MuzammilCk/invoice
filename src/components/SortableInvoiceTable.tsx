@@ -79,7 +79,7 @@ const SortableRow: React.FC<SortableRowProps> = ({ item, index, currency, update
   );
 };
 
-export const SortableInvoiceTable = ({ items, currency, updateItems, Input }: any) => {
+export const SortableInvoiceTable = ({ items, currency, updateItems, Input, isExporting = false }: any) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -129,9 +129,11 @@ export const SortableInvoiceTable = ({ items, currency, updateItems, Input }: an
           </SortableContext>
         </table>
       </DndContext>
-      <button onClick={addItem} className="mt-4 text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity print:hidden">
-        + Add Line Item
-      </button>
+      {!isExporting && (
+        <button onClick={addItem} className="mt-4 text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity print:hidden">
+          + Add Line Item
+        </button>
+      )}
     </div>
   );
 };
