@@ -6,6 +6,22 @@ import { formatDate, formatCurrency, generateId } from '../lib/utils';
 import { computeInvoiceTotals } from '../lib/calculations';
 import { TEMPLATES } from '../lib/templates';
 import { motion, AnimatePresence } from 'motion/react';
+import { z } from 'zod';
+
+const AIResponseSchema = z.object({
+  customerInfo: z.object({
+    name: z.string().max(200).optional().catch(undefined),
+    email: z.string().max(200).optional().catch(undefined),
+    address: z.string().max(500).optional().catch(undefined),
+  }).optional(),
+  items: z.array(z.object({
+    description: z.string().max(500),
+    quantity: z.number().positive().max(100_000),
+    rate: z.number().min(0).max(1_000_000),
+  })).min(1).max(100),
+  taxRate: z.number().min(0).max(100).optional().default(0),
+  notes: z.string().max(2000).optional().default(''),
+});
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -68,6 +84,13 @@ export function Dashboard() {
       }
 
       if (generatedData) {
+        const parsed = AIResponseSchema.safeParse(generatedData);
+        if (!parsed.success) {
+          console.error('AI response validation failed:', parsed.error);
+          throw new Error('AI returned invalid data');
+        }
+        
+        const validData = parsed.data;
         const newInvoice = {
           id: generateId(),
           invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}`,
@@ -78,10 +101,14 @@ export function Dashboard() {
           issueDate: new Date().toISOString(),
           dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
           businessInfo,
-          customerInfo: generatedData.customerInfo || { name: '', email: '', address: '' },
-          items: generatedData.items?.length ? generatedData.items.map((i: any) => ({ ...i, id: generateId() })) : [{ id: generateId(), description: '', quantity: 1, rate: 0 }],
-          taxRate: generatedData.taxRate || 0,
-          notes: generatedData.notes || '',
+          customerInfo: validData.customerInfo ? {
+            name: validData.customerInfo.name || '',
+            email: validData.customerInfo.email || '',
+            address: validData.customerInfo.address || '',
+          } : { name: '', email: '', address: '' },
+          items: validData.items?.length ? validData.items.map((i: any) => ({ ...i, id: generateId() })) : [{ id: generateId(), description: '', quantity: 1, rate: 0 }],
+          taxRate: validData.taxRate || 0,
+          notes: validData.notes || '',
           templateId: 'minimal-executive',
           themeColor: '#4f46e5',
           currency: 'USD',

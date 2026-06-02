@@ -13,9 +13,9 @@ interface AIFormProps {
 // Issue 5.3: Zod schema for validating AI responses
 const AIResponseSchema = z.object({
   customerInfo: z.object({
-    name: z.string().max(200),
-    email: z.string().max(200),
-    address: z.string().max(500),
+    name: z.string().max(200).optional().catch(undefined),
+    email: z.string().max(200).optional().catch(undefined),
+    address: z.string().max(500).optional().catch(undefined),
   }).optional(),
   items: z.array(z.object({
     description: z.string().max(500),
@@ -96,7 +96,11 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
 
       const validData = parsed.data;
       const mappedData: Partial<Invoice> = {
-        customerInfo: validData.customerInfo || undefined,
+        customerInfo: validData.customerInfo ? {
+          name: validData.customerInfo.name || '',
+          email: validData.customerInfo.email || '',
+          address: validData.customerInfo.address || '',
+        } : undefined,
         items: validData.items.map((item) => ({
           ...item,
           id: generateId()
@@ -181,7 +185,11 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
 
       const validData = parsed.data;
       const mappedData: Partial<Invoice> = {
-        customerInfo: validData.customerInfo || undefined,
+        customerInfo: validData.customerInfo ? {
+          name: validData.customerInfo.name || '',
+          email: validData.customerInfo.email || '',
+          address: validData.customerInfo.address || '',
+        } : undefined,
         items: validData.items.map((item) => ({
           ...item,
           id: generateId()
