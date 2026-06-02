@@ -31,6 +31,9 @@ export interface Invoice {
   customerInfo: CustomerInfo;
   items: InvoiceItem[];
   taxRate: number;
+  discountContent?: string;
+  discountRate?: number;
+  shipping?: number;
   notes: string;
   templateId: string;
   themeColor: string;

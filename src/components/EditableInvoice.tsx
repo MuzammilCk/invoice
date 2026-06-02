@@ -1,4 +1,5 @@
 import React from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
 import { Invoice } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { calculateSubtotal, calculateTax, calculateTotal } from '../lib/calculations';
@@ -10,8 +11,10 @@ interface EditableInvoiceProps {
 
 export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps) {
   const subtotal = calculateSubtotal(invoice.items);
-  const tax = calculateTax(subtotal, invoice.taxRate);
-  const total = calculateTotal(subtotal, tax);
+  const discountAmount = invoice.discountRate ? (subtotal * invoice.discountRate / 100) : 0;
+  const taxableAmount = subtotal - discountAmount;
+  const tax = calculateTax(taxableAmount, invoice.taxRate);
+  const total = calculateTotal(subtotal, tax, discountAmount, invoice.shipping || 0);
 
   const updateBusinessInfo = (field: string, value: string) => {
     updateInvoice({ businessInfo: { ...invoice.businessInfo, [field]: value } });
@@ -31,10 +34,15 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
     updateInvoice({ items: [...invoice.items, { id: Math.random().toString(), description: 'New Item', quantity: 1, rate: 0 }] });
   };
 
+  const removeItem = (index: number) => {
+    const newItems = invoice.items.filter((_, i) => i !== index);
+    updateInvoice({ items: newItems });
+  };
+
   const Input = ({ value, onChange, className = '', placeholder = '', multiline = false, ...props }: any) => {
-    const clazz = `bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500 rounded px-1 transition-colors w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 print:border-none print:shadow-none print:ring-0 print:p-0 ${className}`;
+    const clazz = `bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 rounded px-2 py-1 transition-colors w-full focus:outline-none focus:ring-1 focus:ring-indigo-500 print:border-none print:shadow-none print:ring-0 print:p-0 text-slate-900 resize-none ${className}`;
     if (multiline) {
-      return <textarea value={value} onChange={onChange} className={clazz} placeholder={placeholder} rows={2} {...props} />;
+      return <TextareaAutosize value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
     }
     return <input value={value} onChange={onChange} className={clazz} placeholder={placeholder} {...props} />;
   };
@@ -95,17 +103,20 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             </thead>
             <tbody className="text-sm">
               {invoice.items.map((item, index) => (
-                <tr key={item.id} className="border-b border-slate-50 group">
-                  <td className="py-2 pr-2">
-                    <Input value={item.description} onChange={(e: any) => updateItem(index, 'description', e.target.value)} placeholder="Item description" className="font-medium" />
+                <tr key={item.id} className="border-b border-slate-50 group relative">
+                  <td className="py-2 pr-2 relative">
+                    <button onClick={() => removeItem(index)} className="absolute -left-6 top-4 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity print:hidden" title="Remove Item">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <Input multiline value={item.description} onChange={(e: any) => updateItem(index, 'description', e.target.value)} placeholder="Item description" className="font-medium" />
                   </td>
-                  <td className="py-2">
+                  <td className="py-2 align-top pt-3">
                     <Input type="number" value={item.quantity} onChange={(e: any) => updateItem(index, 'quantity', Number(e.target.value))} className="text-right text-slate-600" />
                   </td>
-                  <td className="py-2">
+                  <td className="py-2 align-top pt-3">
                     <Input type="number" value={item.rate} onChange={(e: any) => updateItem(index, 'rate', Number(e.target.value))} className="text-right text-slate-600" />
                   </td>
-                  <td className="py-2 text-right font-semibold pr-2 align-middle">
+                  <td className="py-2 text-right font-semibold pr-2 align-top pt-4">
                     {formatCurrency(item.quantity * item.rate, invoice.currency)}
                   </td>
                 </tr>
@@ -124,8 +135,24 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
               <span>{formatCurrency(subtotal, invoice.currency)}</span>
             </div>
             <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-400 flex items-center gap-1 group">
+                <span className="cursor-pointer group-hover:text-slate-600 transition-colors">Discount</span> 
+                <Input type="number" value={invoice.discountRate || 0} onChange={(e: any) => updateInvoice({ discountRate: Number(e.target.value) })} className="w-16 text-right" />%
+              </span>
+              <span>-{formatCurrency(discountAmount, invoice.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm items-center">
               <span className="text-slate-400 flex items-center gap-1">Tax <Input type="number" value={invoice.taxRate} onChange={(e: any) => updateInvoice({ taxRate: Number(e.target.value) })} className="w-16 text-right" />%</span>
               <span>{formatCurrency(tax, invoice.currency)}</span>
+            </div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-400 flex items-center gap-1">
+                Shipping
+              </span>
+              <span className="flex items-center">
+                 <span className="text-slate-400 mr-1">$</span>
+                 <Input type="number" value={invoice.shipping || 0} onChange={(e: any) => updateInvoice({ shipping: Number(e.target.value) })} className="w-20 text-right" />
+              </span>
             </div>
             <div className="flex justify-between pt-4 border-t border-slate-200 items-baseline">
               <span className="text-sm font-bold">Total Due</span>
