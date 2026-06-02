@@ -137,7 +137,7 @@ export function Editor() {
       <AIAssistantSidebar onGenerate={handleHandleAIGeneration} />
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col h-full bg-zinc-950">
+      <div className="flex-1 min-w-0 flex flex-col h-full bg-zinc-950">
         <header className="h-16 px-6 flex justify-between items-center bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-10 shadow-sm">
           <div className="flex items-center gap-4">
             <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-white transition-colors bg-zinc-800/50 p-2 rounded-lg hover:bg-zinc-800">

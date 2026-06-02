@@ -78,7 +78,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
       <div className="h-full flex flex-col pt-4">
         {/* Header Dynamically styled based on template */}
         <div className={`flex justify-between items-start mb-12 ${activeTemplate.styles.headerLayout === 'col' ? 'flex-col gap-8' : ''} ${activeTemplate.styles.headerLayout === 'row-reverse' ? 'flex-row-reverse' : ''} ${activeTemplate.styles.headerLayout === 'col-reverse' ? 'flex-col-reverse gap-8' : ''}`}>
-          <div className={`${activeTemplate.styles.headerLayout.includes('col') ? 'w-full' : 'w-1/2'}`}>
+          <div className={`${activeTemplate.styles.headerLayout.includes('col') ? 'w-full' : 'flex-1 min-w-0 pr-4'}`}>
             <AnimatePresence>
               {settings.showLogo && (
                 <motion.div key="logo" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
@@ -109,11 +109,11 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             </AnimatePresence>
           </div>
           
-          <div className={`flex gap-12 ${activeTemplate.styles.headerLayout.includes('col') ? 'w-full justify-between' : 'text-right justify-end'}`}>
+          <div className={`flex gap-6 flex-shrink-0 ${activeTemplate.styles.headerLayout.includes('col') ? 'w-full justify-between' : 'text-right justify-end'}`}>
             {activeTemplate.styles.headerLayout === 'split' && (
               <AnimatePresence>
                {settings.showFrom && (
-                 <motion.div key="from-split" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-left w-48 relative group/section overflow-hidden">
+                 <motion.div key="from-split" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-left w-44 relative group/section overflow-hidden">
                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">From</div>
                    <Input value={invoice.businessInfo.name} onChange={(e: any) => updateBusinessInfo('name', e.target.value)} className="text-sm font-semibold" placeholder="Your Business Name" />
                    <Input value={invoice.businessInfo.address} onChange={(e: any) => updateBusinessInfo('address', e.target.value)} multiline className="text-xs text-slate-500 mt-1" placeholder="Your Address" />
@@ -128,7 +128,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             
             <AnimatePresence>
               {settings.showBilledTo && (
-                <motion.div key="billed-to" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-48 relative group/section overflow-hidden`}>
+                <motion.div key="billed-to" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-44 relative group/section overflow-hidden`}>
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Billed To</div>
                   <Input value={invoice.customerInfo.name} onChange={(e: any) => updateCustomerInfo('name', e.target.value)} className={`text-base font-bold ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Name" />
                   <Input value={invoice.customerInfo.address} onChange={(e: any) => updateCustomerInfo('address', e.target.value)} multiline className={`text-xs text-slate-500 mt-1 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Address" />
