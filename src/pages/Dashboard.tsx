@@ -35,6 +35,7 @@ export function Dashboard() {
       themeColor: '#6366f1',
       currency: 'USD',
       displaySettings: {
+        showTitle: true, showInvoiceId: true,
         showLogo: true, showFrom: true, showBilledTo: true,
         showIssueDate: true, showDueDate: true, showDiscount: true,
         showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
@@ -82,6 +83,7 @@ export function Dashboard() {
           themeColor: '#4f46e5',
           currency: 'USD',
           displaySettings: {
+            showTitle: true, showInvoiceId: true,
             showLogo: true, showFrom: true, showBilledTo: true,
             showIssueDate: true, showDueDate: true, showDiscount: true,
             showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
@@ -242,10 +244,12 @@ export function Dashboard() {
       <AnimatePresence>
         {isAICreateOpen && (
           <motion.div 
+            key="ai-modal-backdrop"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
           >
              <motion.div 
+               key="ai-modal-content"
                initial={{ opacity: 0, scale: 0.95, y: 20 }}
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.95, y: 20 }}

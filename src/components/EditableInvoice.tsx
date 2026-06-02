@@ -15,6 +15,7 @@ interface EditableInvoiceProps {
 
 export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps) {
   const settings = invoice.displaySettings || {
+    showTitle: true, showInvoiceId: true,
     showLogo: true, showFrom: true, showBilledTo: true,
     showIssueDate: true, showDueDate: true, showDiscount: true,
     showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
@@ -80,7 +81,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
           <div className={`${activeTemplate.styles.headerLayout.includes('col') ? 'w-full' : 'w-1/2'}`}>
             <AnimatePresence>
               {settings.showLogo && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
+                <motion.div key="logo" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
                   <div className="h-16 w-16 mb-6 rounded flex items-center justify-center text-white font-serif italic text-3xl shadow-lg" style={{ backgroundColor: invoice.themeColor, borderRadius: activeTemplate.styles.borderRadius }}>
                     {invoice.businessInfo.name ? invoice.businessInfo.name.charAt(0).toUpperCase() : 'B'}
                   </div>
@@ -89,18 +90,30 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
               )}
             </AnimatePresence>
 
-            <h2 className="text-4xl font-light tracking-tight mb-2 uppercase break-words w-full"><Input value={invoice.title || "Invoice"} onChange={(e: any) => updateInvoice({ title: e.target.value })} className="text-4xl font-light tracking-tight uppercase" placeholder="INVOICE" /></h2>
-            <div className="flex items-center gap-2 mt-2 text-slate-500 bg-slate-50 p-2 rounded w-max">
-              <span className="text-xs font-bold uppercase tracking-wider">#</span>
-              <Input value={invoice.id} onChange={(e: any) => updateInvoice({ id: e.target.value })} className="text-sm font-mono font-medium" />
-            </div>
+            <AnimatePresence>
+              {settings.showTitle && (
+                <motion.div key="title" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
+                  <h2 className="text-4xl font-light tracking-tight mb-2 uppercase break-words w-full"><Input value={invoice.title || "Invoice"} onChange={(e: any) => updateInvoice({ title: e.target.value })} className="text-4xl font-light tracking-tight uppercase" placeholder="INVOICE" /></h2>
+                  <HideButton settingKey="showTitle" />
+                </motion.div>
+              )}
+              {settings.showInvoiceId && (
+                <motion.div key="invoiceId" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section">
+                  <div className="flex items-center gap-2 mt-2 text-slate-500 bg-slate-50 p-2 rounded w-max">
+                    <span className="text-xs font-bold uppercase tracking-wider">#</span>
+                    <Input value={invoice.id} onChange={(e: any) => updateInvoice({ id: e.target.value })} className="text-sm font-mono font-medium" />
+                  </div>
+                  <HideButton settingKey="showInvoiceId" />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
           <div className={`flex gap-12 ${activeTemplate.styles.headerLayout.includes('col') ? 'w-full justify-between' : 'text-right justify-end'}`}>
             {activeTemplate.styles.headerLayout === 'split' && (
               <AnimatePresence>
                {settings.showFrom && (
-                 <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-left w-48 relative group/section overflow-hidden">
+                 <motion.div key="from-split" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="text-left w-48 relative group/section overflow-hidden">
                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">From</div>
                    <Input value={invoice.businessInfo.name} onChange={(e: any) => updateBusinessInfo('name', e.target.value)} className="text-sm font-semibold" placeholder="Your Business Name" />
                    <Input value={invoice.businessInfo.address} onChange={(e: any) => updateBusinessInfo('address', e.target.value)} multiline className="text-xs text-slate-500 mt-1" placeholder="Your Address" />
@@ -115,7 +128,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             
             <AnimatePresence>
               {settings.showBilledTo && (
-                <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-48 relative group/section overflow-hidden`}>
+                <motion.div key="billed-to" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className={`${activeTemplate.styles.headerLayout === 'split' ? 'text-left' : 'text-right'} w-48 relative group/section overflow-hidden`}>
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Billed To</div>
                   <Input value={invoice.customerInfo.name} onChange={(e: any) => updateCustomerInfo('name', e.target.value)} className={`text-base font-bold ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Name" />
                   <Input value={invoice.customerInfo.address} onChange={(e: any) => updateCustomerInfo('address', e.target.value)} multiline className={`text-xs text-slate-500 mt-1 ${activeTemplate.styles.headerLayout === 'split' ? '' : 'text-right'}`} placeholder="Client Address" />
@@ -131,7 +144,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
           <div className="flex justify-between mb-12 border-b border-slate-100 pb-8">
             <AnimatePresence>
               {settings.showFrom && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="w-64 relative group/section">
+                <motion.div key="from" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="w-64 relative group/section">
                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">From</div>
                    <Input value={invoice.businessInfo.name} onChange={(e: any) => updateBusinessInfo('name', e.target.value)} className="text-sm font-semibold" placeholder="Your Business Name" />
                    <Input value={invoice.businessInfo.address} onChange={(e: any) => updateBusinessInfo('address', e.target.value)} multiline className="text-xs text-slate-500 mt-1" placeholder="Your Address" />
@@ -146,14 +159,14 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             <div className="flex gap-8">
               <AnimatePresence>
                 {settings.showIssueDate && (
-                  <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
+                  <motion.div key="issue" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Issue Date</p>
                     <Input type="date" value={invoice.issueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ issueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
                     <HideButton settingKey="showIssueDate" />
                   </motion.div>
                 )}
                 {settings.showDueDate && (
-                  <motion.div initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
+                  <motion.div key="due" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: 'auto' }} exit={{ opacity: 0, width: 0 }} className="w-32 relative group/section overflow-hidden">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Due Date</p>
                     <Input type="date" value={invoice.dueDate.split('T')[0]} onChange={(e: any) => updateInvoice({ dueDate: new Date(e.target.value).toISOString() })} className="text-sm font-medium text-slate-800 text-right" />
                     <HideButton settingKey="showDueDate" />
@@ -175,7 +188,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
             </div>
             <AnimatePresence>
               {settings.showDiscount && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 relative group/section overflow-hidden">
+                <motion.div key="discount" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 relative group/section overflow-hidden">
                   <span className="text-slate-500 flex items-center gap-1 group font-medium">
                     <span className="cursor-pointer group-hover:text-slate-800 transition-colors">Discount</span> 
                     <Input type="number" value={invoice.discountRate || 0} onChange={(e: any) => updateInvoice({ discountRate: Number(e.target.value) })} className="w-16 text-right bg-white border border-slate-200" />%
@@ -185,14 +198,14 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
                 </motion.div>
               )}
               {settings.showTax && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 relative group/section overflow-hidden">
+                <motion.div key="tax" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 relative group/section overflow-hidden">
                   <span className="text-slate-500 flex items-center gap-1 font-medium">Tax <Input type="number" value={invoice.taxRate} onChange={(e: any) => updateInvoice({ taxRate: Number(e.target.value) })} className="w-16 text-right bg-white border border-slate-200" />%</span>
                   <span className="font-medium">{formatCurrency(tax, invoice.currency)}</span>
                   <HideButton settingKey="showTax" />
                 </motion.div>
               )}
               {settings.showShipping && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 border-b border-slate-200 pb-3 relative group/section overflow-hidden">
+                <motion.div key="shipping" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="flex justify-between text-sm items-center py-1 border-b border-slate-200 pb-3 relative group/section overflow-hidden">
                   <span className="text-slate-500 font-medium pt-1">
                     Shipping
                   </span>
@@ -215,7 +228,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
           <div className="w-1/2 pr-8">
             <AnimatePresence>
               {settings.showNotes && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section overflow-hidden">
+                <motion.div key="notes" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section overflow-hidden">
                    <div className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-3">Notes & Terms</div>
                    <Input value={invoice.notes} onChange={(e: any) => updateInvoice({ notes: e.target.value })} multiline className="text-xs text-slate-500 leading-relaxed min-h-[60px]" placeholder="Thank you for your business." />
                    <HideButton settingKey="showNotes" />
@@ -226,7 +239,7 @@ export function EditableInvoice({ invoice, updateInvoice }: EditableInvoiceProps
           <div>
             <AnimatePresence>
               {settings.showPaymentMethods && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section overflow-hidden">
+                <motion.div key="payment-methods" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="relative group/section overflow-hidden">
                   <div className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-right">Protected & Verified</div>
                   <div className="flex justify-end gap-2">
                     <div className="w-12 h-8 bg-slate-100 rounded-md"></div>

@@ -43,6 +43,7 @@ export const useStore = create<StoreState>()(
               ...updates,
               displaySettings: {
                 ...(inv.displaySettings || {
+                  showTitle: true, showInvoiceId: true,
                   showLogo: true, showFrom: true, showBilledTo: true,
                   showIssueDate: true, showDueDate: true, showDiscount: true,
                   showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true

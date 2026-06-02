@@ -4,11 +4,50 @@ import { AIAssistantSidebar } from '../components/AIAssistantSidebar';
 import { EditableInvoice } from '../components/EditableInvoice';
 import { useStore } from '../store/useStore';
 import { TEMPLATES } from '../lib/templates';
-import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
-import html2canvas from 'html2canvas';
+import * as htmlToImage from 'html-to-image';
 import jsPDF from 'jspdf';
+
+function Dropdown({ options, value, onChange, placeholder }: { options: {value: string, label: string}[], value: string, onChange: (val: string) => void, placeholder: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selected = options.find(o => o.value === value) || options[0];
+
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-zinc-900 border border-zinc-700/50 text-zinc-200 text-sm rounded-xl p-3 flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-sm"
+      >
+        <span>{selected?.label || placeholder}</span>
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} className="text-zinc-500"><ChevronDown className="w-4 h-4" /></motion.div>
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            key="dropdown-menu"
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-[100] max-h-60 overflow-auto custom-scrollbar backdrop-blur-xl"
+          >
+            {options.map(opt => (
+              <button 
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-700 transition-colors ${value === opt.value ? 'text-indigo-400 bg-zinc-800/80' : 'text-zinc-300'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export function Editor() {
   const { id } = useParams();
@@ -39,29 +78,42 @@ export function Editor() {
     if (!printRef.current || isGeneratingPDF) return;
     
     setIsGeneratingPDF(true);
-    const element = printRef.current;
-    
-    // Save previous inline styles
-    const oldTransform = element.style.transform;
-    const oldMarginBottom = element.style.marginBottom;
-    const oldMarginLeft = element.style.marginLeft;
-    const oldMarginRight = element.style.marginRight;
-    
-    // Clear styles temporarily to grab a 1:1 unscaled snapshot
-    element.style.transform = 'none';
-    element.style.marginBottom = '0';
-    element.style.marginLeft = '0';
-    element.style.marginRight = '0';
 
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2, // Retain high resolution 
-        useCORS: true,
-        logging: false,
+      // 1. Create off-screen wrapper node to ensure perfect dimensions irrespective of current viewport/zoom
+      const tempWrapper = document.createElement('div');
+      tempWrapper.style.position = 'absolute';
+      tempWrapper.style.top = '-9999px';
+      tempWrapper.style.left = '-9999px';
+      tempWrapper.style.width = '210mm';
+      tempWrapper.style.minHeight = '297mm';
+      
+      const elementClone = printRef.current.cloneNode(true) as HTMLElement;
+      
+      // Preserve the values of form elements
+      const originalInputs = printRef.current.querySelectorAll('input') as NodeListOf<HTMLInputElement>;
+      const clonedInputs = elementClone.querySelectorAll('input') as NodeListOf<HTMLInputElement>;
+      originalInputs.forEach((input, i) => { if (clonedInputs[i]) { clonedInputs[i].value = input.value; if (input.type === 'checked') clonedInputs[i].checked = input.checked; } });
+      
+      const originalTextareas = printRef.current.querySelectorAll('textarea') as NodeListOf<HTMLTextAreaElement>;
+      const clonedTextareas = elementClone.querySelectorAll('textarea') as NodeListOf<HTMLTextAreaElement>;
+      originalTextareas.forEach((ta, i) => { if (clonedTextareas[i]) clonedTextareas[i].value = ta.value; });
+
+      const originalSelects = printRef.current.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
+      const clonedSelects = elementClone.querySelectorAll('select') as NodeListOf<HTMLSelectElement>;
+      originalSelects.forEach((select, i) => { if (clonedSelects[i]) clonedSelects[i].value = select.value; });
+
+      // Strip motion styling if any
+      elementClone.style.transform = 'none';
+
+      tempWrapper.appendChild(elementClone);
+      document.body.appendChild(tempWrapper);
+
+      const imgData = await htmlToImage.toPng(tempWrapper, {
+        pixelRatio: 2, 
         backgroundColor: '#ffffff'
       });
       
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -70,14 +122,11 @@ export function Editor() {
       
       pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
       pdf.save(`${invoice.title || 'Invoice'}.pdf`);
+      
+      tempWrapper.remove();
     } catch (error) {
       console.error("PDF generation failed", error);
     } finally {
-      // Re-apply zoom & offsets
-      element.style.transform = oldTransform;
-      element.style.marginBottom = oldMarginBottom;
-      element.style.marginLeft = oldMarginLeft;
-      element.style.marginRight = oldMarginRight;
       setIsGeneratingPDF(false);
     }
   };
@@ -126,7 +175,7 @@ export function Editor() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto bg-zinc-950 relative p-8 custom-scrollbar pt-12" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+        <div className="flex-1 overflow-auto bg-zinc-950/80 relative custom-scrollbar">
           {/* Floating Zoom Controls */}
           <div className="fixed bottom-16 right-[340px] flex items-center bg-zinc-800 backdrop-blur-md rounded-full p-1.5 border border-zinc-700 shadow-2xl z-[100] print:hidden hidden md:flex">
              <button onClick={() => setZoom(Math.max(0.3, zoom - 0.1))} className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-700 transition-colors">
@@ -138,25 +187,22 @@ export function Editor() {
              </button>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="print:p-0 print:m-0 print-shadow-none origin-top transition-transform h-max"
-            style={{ 
-              transform: `scale(${zoom})`, 
-              transformOrigin: 'top center',
-              marginBottom: `${(zoom - 1) * 297}mm`,
-              marginRight: `${(zoom - 1) * 105}mm`, 
-              marginLeft: `${(zoom - 1) * 105}mm`
-            }}
-            ref={printRef}
-          >
-            <EditableInvoice 
-              invoice={invoice} 
-              updateInvoice={(updates) => updateInvoice(invoice.id, updates)} 
-            />
-          </motion.div>
+          <div className="w-full min-h-max flex justify-center py-16">
+            <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-out' }}>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="print:p-0 print:m-0 print-shadow-none h-max origin-top"
+                ref={printRef}
+              >
+                <EditableInvoice 
+                  invoice={invoice} 
+                  updateInvoice={(updates) => updateInvoice(invoice.id, updates)} 
+                />
+              </motion.div>
+            </div>
+          </div>
         </div>
         
         <footer className="h-10 px-6 flex flex-shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-900 text-[10px] text-zinc-500">
@@ -168,28 +214,25 @@ export function Editor() {
       </div>
 
       {/* Right Properties Sidebar */}
-      <div className="w-[320px] bg-zinc-900/40 flex flex-col h-full border-l border-zinc-800 flex-shrink-0 relative z-20 shadow-xl">
-         <div className="h-16 border-b border-zinc-800/50 flex items-center px-6 bg-zinc-900/50">
+      <div className="w-[320px] bg-zinc-900 flex flex-col h-full border-l border-zinc-800 flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+         <div className="h-16 border-b border-zinc-800/80 flex items-center px-6 bg-zinc-900/80 backdrop-blur-sm z-30">
            <label className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
              <Palette className="w-4 h-4 text-indigo-400" /> Document Settings
            </label>
          </div>
          
-         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-           <div className="space-y-3">
+         <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar relative">
+           <div className="space-y-3 relative z-40">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Design Family</span>
-             <select 
+             <Dropdown 
                value={invoice.templateId}
-               onChange={(e) => updateInvoice(invoice.id, { templateId: e.target.value })}
-               className="w-full bg-zinc-900 border border-zinc-700/50 text-zinc-200 text-sm rounded-xl p-3 focus:outline-none focus:border-indigo-500 transition-colors shadow-sm"
-             >
-               {TEMPLATES.map(tpl => (
-                 <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-               ))}
-             </select>
+               onChange={(val) => updateInvoice(invoice.id, { templateId: val })}
+               placeholder="Select Template"
+               options={TEMPLATES.map(tpl => ({ value: tpl.id, label: tpl.name }))}
+             />
            </div>
            
-           <div className="space-y-3">
+           <div className="space-y-3 relative z-30">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Accent Color</span>
              <div className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50">
                <span className="text-sm text-zinc-300">Custom Color</span>
@@ -209,16 +252,19 @@ export function Editor() {
              </div>
            </div>
 
-           <div className="space-y-3">
+           <div className="space-y-3 relative z-20">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><LayoutTemplate className="w-4 h-4 text-indigo-400" /> Document Modules</span>
-             <div className="bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50 divide-y divide-zinc-800/50 shadow-inner">
+             <div className="bg-zinc-900/50 p-1.5 rounded-2xl border border-zinc-800/80 divide-y divide-zinc-800/30 shadow-inner">
                {(function() {
                  const currentSettings = invoice.displaySettings || {
+                   showTitle: true, showInvoiceId: true,
                    showLogo: true, showFrom: true, showBilledTo: true,
                    showIssueDate: true, showDueDate: true, showDiscount: true,
                    showTax: true, showShipping: true, showNotes: true, showPaymentMethods: true
                  };
                  return [
+                   { key: 'showTitle', label: 'Invoice Title' },
+                   { key: 'showInvoiceId', label: 'Invoice ID' },
                    { key: 'showLogo', label: 'Company Logo' },
                    { key: 'showFrom', label: 'From Address' },
                    { key: 'showBilledTo', label: 'Billed To Address' },
@@ -230,8 +276,8 @@ export function Editor() {
                    { key: 'showNotes', label: 'Notes & Terms' },
                    { key: 'showPaymentMethods', label: 'Payment Box' },
                  ].map((module) => (
-                   <div key={module.key} className="flex justify-between items-center p-3 hover:bg-zinc-800/20 transition-colors">
-                     <span className="text-sm text-zinc-300 pointer-events-none">{module.label}</span>
+                   <div key={module.key} className="flex justify-between items-center p-3 hover:bg-zinc-800/30 transition-colors rounded-lg">
+                     <span className="text-[13px] font-medium text-zinc-300 pointer-events-none">{module.label}</span>
                      <button 
                        onClick={() => updateInvoice(invoice.id, { 
                          displaySettings: { 
@@ -239,12 +285,13 @@ export function Editor() {
                            [module.key]: !currentSettings[module.key as keyof typeof currentSettings] 
                          } 
                        })}
-                       className={`w-10 h-5 rounded-full relative transition-colors ${currentSettings[module.key as keyof typeof currentSettings] ? 'bg-indigo-500' : 'bg-zinc-700'}`}
+                       className={`w-11 h-6 rounded-full relative transition-colors shadow-inner flex items-center border border-zinc-900/50 ${currentSettings[module.key as keyof typeof currentSettings] ? 'bg-indigo-500' : 'bg-zinc-700/80'}`}
                      >
                        <motion.div 
                          layout
-                         className="w-4 h-4 bg-white rounded-full absolute top-0.5 shadow border border-black/10"
-                         style={{ left: currentSettings[module.key as keyof typeof currentSettings] ? 'calc(100% - 1.125rem)' : '0.125rem' }}
+                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                         className="w-4 h-4 bg-white rounded-full absolute shadow-sm"
+                         style={{ left: currentSettings[module.key as keyof typeof currentSettings] ? 'calc(100% - 1.25rem)' : '0.25rem' }}
                        />
                      </button>
                    </div>
@@ -253,35 +300,37 @@ export function Editor() {
              </div>
            </div>
            
-           <div className="space-y-3">
+           <div className="space-y-3 relative z-10">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Currency Profile</span>
-             <select 
+             <Dropdown 
                value={invoice.currency}
-               onChange={(e) => updateInvoice(invoice.id, { currency: e.target.value })}
-               className="w-full bg-zinc-900 border border-zinc-700/50 text-zinc-200 text-sm rounded-xl p-3 focus:outline-none focus:border-indigo-500 transition-colors shadow-sm"
-             >
-               <option value="USD">USD ($) - United States</option>
-               <option value="EUR">EUR (€) - European Union</option>
-               <option value="GBP">GBP (£) - United Kingdom</option>
-               <option value="INR">INR (₹) - India</option>
-               <option value="AUD">AUD ($) - Australia</option>
-               <option value="CAD">CAD ($) - Canada</option>
-             </select>
+               onChange={(val) => updateInvoice(invoice.id, { currency: val })}
+               placeholder="Select Currency"
+               options={[
+                 { value: 'USD', label: 'USD ($) - United States' },
+                 { value: 'EUR', label: 'EUR (€) - European Union' },
+                 { value: 'GBP', label: 'GBP (£) - United Kingdom' },
+                 { value: 'INR', label: 'INR (₹) - India' },
+                 { value: 'AUD', label: 'AUD ($) - Australia' },
+                 { value: 'CAD', label: 'CAD ($) - Canada' }
+               ]}
+             />
            </div>
            
-           <div className="pt-8 border-t border-zinc-800/50">
+           <div className="pt-8 border-t border-zinc-800/50 relative z-0">
              <div className="space-y-3">
                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Document State</label>
-               <select 
+               <Dropdown 
                  value={invoice.status}
-                 onChange={(e) => updateInvoice(invoice.id, { status: e.target.value as any })}
-                 className="w-full bg-zinc-900 border border-zinc-700/50 text-zinc-200 text-sm rounded-xl p-3 focus:outline-none focus:border-indigo-500 shadow-sm font-medium transition-colors"
-               >
-                 <option value="draft">Draft - Unsent</option>
-                 <option value="pending">Pending - Waiting Payment</option>
-                 <option value="paid">Paid - Completed</option>
-                 <option value="overdue">Overdue - Action Required</option>
-               </select>
+                 onChange={(val) => updateInvoice(invoice.id, { status: val as any })}
+                 placeholder="Select State"
+                 options={[
+                   { value: 'draft', label: 'Draft - Unsent' },
+                   { value: 'pending', label: 'Pending - Waiting Payment' },
+                   { value: 'paid', label: 'Paid - Completed' },
+                   { value: 'overdue', label: 'Overdue - Action Required' }
+                 ]}
+               />
              </div>
            </div>
          </div>

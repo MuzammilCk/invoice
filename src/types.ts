@@ -20,6 +20,8 @@ export interface BusinessInfo {
 export type InvoiceStatus = 'draft' | 'pending' | 'paid' | 'overdue';
 
 export interface DisplaySettings {
+  showTitle: boolean;
+  showInvoiceId: boolean;
   showLogo: boolean;
   showFrom: boolean;
   showBilledTo: boolean;
