@@ -208,6 +208,93 @@ python3>=3.10   — Required for faster-whisper
 | API routes | `/api/v1/{resource}` (existing convention preserved) |
 | Error responses | `{ error: string, requestId?: string }` |
 
+## DECISION 13: Authentication Strategy
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Primary Auth** | JWT (Bearer tokens) | Stateless, standard, works with SPA |
+| **Secondary Auth** | API key (`X-API-Key`) | Backward compat, CLI/self-hosted |
+| **Password Hashing** | bcryptjs (cost 12) | Industry standard, timing-safe |
+| **Token Expiry** | Access: 24h, Refresh: 7d | Balance security/UX |
+| **Dev Mode** | Auth skipped when no secrets set | Developer convenience |
+
+## DECISION 14: Financial Arithmetic Library
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Library** | `decimal.js` v10+ | Arbitrary-precision decimal arithmetic |
+| **Precision** | 20 significant digits | Exceeds any currency requirement |
+| **Rounding** | `ROUND_HALF_UP` | Standard banker's rounding |
+| **Boundary** | `toDecimalPlaces(2).toNumber()` at output | Keep API compatibility (number type) |
+| **Interface** | `InvoiceTotals` uses `number` | Decimal is internal implementation detail |
+
+### ❌ REJECTED ALTERNATIVES
+
+| Alternative | Why Rejected |
+|---|---|
+| `big.js` | Smaller API surface, but `decimal.js` has better TS support and is more battle-tested |
+| `dinero.js` | Over-engineered for our use case; adds money-specific concepts we don't need |
+| Native `BigInt` | Cannot represent decimals; would require integer-cents representation throughout |
+| `toFixed(2)` | String-based, doesn't fix intermediate calculation errors |
+
+## DECISION 15: PDF Generation Strategy
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Engine** | Puppeteer (full, with bundled Chromium) | True vector PDF, reuses HTML/CSS templates |
+| **Rendering** | Server-side via `POST /api/v1/invoices/:id/pdf` | Client-side is raster-only |
+| **Template** | Self-contained HTML with inline CSS | No external dependencies during render |
+| **Caching** | LRU cache (50 entries), keyed by `invoiceId + updatedAt` | Avoid re-rendering unchanged invoices |
+| **Timeout** | 30 seconds | Prevent resource exhaustion |
+| **Validation** | Pre-export via `/validate` endpoint | Block incomplete invoice exports |
+| **Browser Pool** | Singleton, lazy-initialized | Minimize memory footprint |
+
+### ❌ REMOVED Libraries
+- `html-to-image` — Produces raster PNG, not vector PDF
+- `jspdf` — Only used as PNG-to-PDF wrapper, not real PDF generation
+- `html2canvas` — Same raster limitation
+
+## DECISION 19: UI Architecture
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Onboarding** | 3-step wizard (business → defaults → ready) | Ensure business info populated before first invoice |
+| **Client Directory** | Extracted from existing invoice data | Zero additional data entry; grows organically |
+| **Template Gallery** | Grid with skeleton previews | Cheap to render; shows template structure without full rendering |
+| **Mobile** | Bottom nav bar + bottom sheet AI | Standard mobile UX patterns |
+| **Search** | Client-side filtering via `useMemo` | Under 1000 invoices = instant; no server needed |
+
+## DECISION 20: Intelligence Features Architecture
+
+| Feature | Approach | Rationale |
+|---|---|---|
+| **Client Memory** | Query past invoices, inject context into system prompt | Zero additional storage; leverages existing data |
+| **Anomaly Detection** | LLM-based analysis with structured JSON output | Flexible, handles edge cases humans define poorly |
+| **OCR** | Tesseract.js server-side + LLM post-processing | Tesseract for text extraction, LLM for semantic structuring |
+| **Email Drafts** | LLM with invoice data context | Professional, personalized, multi-type (send/reminder/thank-you) |
+| **Cloud Fallback** | Groq API with explicit user consent | Ultra-fast cloud LLM; requires PII warning |
+| **Speed Indicator** | Ping `/api/tags` every 30s, classify by response time | Lightweight, non-intrusive monitoring |
+| **Recurring** | `node-cron` with template cloning | Simple scheduling without external services |
+
+## DECISION 21: OCR Engine
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Engine** | `tesseract.js` v5+ | WASM-based, no native deps, server-side capable |
+| **Languages** | `eng+hin+tam+tel+mal+kan+ben` | Covers primary user base |
+| **Post-Processing** | Ollama structured extraction | Corrects OCR errors, maps to invoice schema |
+| **File Types** | PNG, JPEG, WebP, TIFF, PDF | Standard document formats |
+
+## DECISION 22: Cloud Fallback Provider
+
+| Property | Decision | Rationale |
+|---|---|---|
+| **Provider** | Groq (free tier: 30 req/min) | Fastest inference API; free tier sufficient for fallback |
+| **Model** | `llama-3.1-8b-instant` | Fast, good JSON adherence, no vendor lock-in |
+| **Activation** | Only when Ollama is offline + user consents | Privacy-first; explicit opt-in |
+| **PII** | Stripped by `stripPIIFromPrompt()` before cloud | Defense-in-depth |
+
 ---
 
 *End of Decision Log — All decisions are FROZEN for implementation*
+

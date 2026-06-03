@@ -1,19 +1,34 @@
+import Decimal from 'decimal.js';
 import { Invoice, InvoiceItem } from '../types';
 
-// ── Base calculation functions ──
+// ── Configure Decimal.js for financial precision ──
+Decimal.set({
+  precision: 20,
+  rounding: Decimal.ROUND_HALF_UP,
+});
+
+// ── Base calculation functions (Decimal internally, number at boundaries) ──
 
 export const calculateSubtotal = (items: InvoiceItem[]): number => {
-  return items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
+  const result = items.reduce(
+    (sum, item) => sum.plus(new Decimal(item.quantity).times(new Decimal(item.rate))),
+    new Decimal(0)
+  );
+  return result.toDecimalPlaces(2).toNumber();
 };
 
 export const calculateDiscount = (subtotal: number, discountRate: number = 0): number => {
-  // Issue 4.3: Cap discount so it can never exceed subtotal
-  const discount = subtotal * (discountRate / 100);
-  return Math.min(discount, subtotal);
+  const sub = new Decimal(subtotal);
+  const rate = new Decimal(discountRate).dividedBy(100);
+  const discount = sub.times(rate);
+  // Cap discount so it can never exceed subtotal
+  return Decimal.min(discount, sub).toDecimalPlaces(2).toNumber();
 };
 
 export const calculateTax = (amountToTax: number, taxRate: number): number => {
-  return amountToTax * (taxRate / 100);
+  const amount = new Decimal(amountToTax);
+  const rate = new Decimal(taxRate).dividedBy(100);
+  return amount.times(rate).toDecimalPlaces(2).toNumber();
 };
 
 export const calculateTotal = (
@@ -22,14 +37,14 @@ export const calculateTotal = (
   discount: number = 0,
   shipping: number = 0
 ): number => {
-  // Issue 4.3: Cap discount at subtotal, floor total at 0
-  const cappedDiscount = Math.min(discount, subtotal);
-  return Math.max(0, subtotal - cappedDiscount + tax + shipping);
+  const sub = new Decimal(subtotal);
+  const disc = Decimal.min(new Decimal(discount), sub);
+  const total = sub.minus(disc).plus(new Decimal(tax)).plus(new Decimal(shipping));
+  return Decimal.max(total, new Decimal(0)).toDecimalPlaces(2).toNumber();
 };
 
-// ── Issue 4.1: Single source-of-truth calculation ──
+// ── Single source-of-truth calculation ──
 // Used by EditableInvoice, InvoicePreview, AND Dashboard.
-// Eliminates the tax discrepancy bug where preview calculated tax on full subtotal.
 
 export interface InvoiceTotals {
   subtotal: number;
@@ -49,8 +64,11 @@ export function computeInvoiceTotals(invoice: Invoice): InvoiceTotals {
   const actualDiscountRate = settings?.showDiscount ? (invoice.discountRate || 0) : 0;
   const discountAmount = calculateDiscount(subtotal, actualDiscountRate);
 
-  // Tax is applied AFTER discount (the correct behavior)
-  const taxableAmount = subtotal - discountAmount;
+  // Tax is applied AFTER discount (correct behavior)
+  const taxableAmount = new Decimal(subtotal)
+    .minus(new Decimal(discountAmount))
+    .toDecimalPlaces(2)
+    .toNumber();
   const actualTaxRate = settings?.showTax ? invoice.taxRate : 0;
   const taxAmount = calculateTax(taxableAmount, actualTaxRate);
 

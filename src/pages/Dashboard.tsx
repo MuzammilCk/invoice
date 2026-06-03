@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, LayoutTemplate, MoreVertical, FileText, CalendarDays, Mic, Type } from 'lucide-react';
+import { Plus, Sparkles, LayoutTemplate, MoreVertical, FileText, CalendarDays, Mic, Type, Search } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { formatDate, formatCurrency, generateId } from '../lib/utils';
 import { computeInvoiceTotals } from '../lib/calculations';
@@ -8,20 +8,7 @@ import { TEMPLATES } from '../lib/templates';
 import { motion, AnimatePresence } from 'motion/react';
 import { z } from 'zod';
 
-const AIResponseSchema = z.object({
-  customerInfo: z.object({
-    name: z.string().max(200).optional().catch(undefined),
-    email: z.string().max(200).optional().catch(undefined),
-    address: z.string().max(500).optional().catch(undefined),
-  }).optional(),
-  items: z.array(z.object({
-    description: z.string().max(500),
-    quantity: z.number().positive().max(100_000),
-    rate: z.number().min(0).max(1_000_000),
-  })).min(1).max(100),
-  taxRate: z.number().min(0).max(100).optional().default(0),
-  notes: z.string().max(2000).optional().default(''),
-});
+import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -33,6 +20,51 @@ export function Dashboard() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'amount' | 'name'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Filtered and sorted invoices
+  const filteredInvoices = useMemo(() => {
+    let result = [...invoices];
+
+    // Search
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(inv =>
+        inv.invoiceNumber.toLowerCase().includes(q) ||
+        (inv.customerInfo?.name || '').toLowerCase().includes(q) ||
+        (inv.customerInfo?.email || '').toLowerCase().includes(q) ||
+        (inv.title || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(inv => inv.status === statusFilter);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let comparison = 0;
+      switch (sortBy) {
+        case 'date':
+          comparison = new Date(a.issueDate).getTime() - new Date(b.issueDate).getTime();
+          break;
+        case 'amount':
+          comparison = computeInvoiceTotals(a).grandTotal - computeInvoiceTotals(b).grandTotal;
+          break;
+        case 'name':
+          comparison = (a.customerInfo?.name || '').localeCompare(b.customerInfo?.name || '');
+          break;
+      }
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+
+    return result;
+  }, [invoices, searchQuery, statusFilter, sortBy, sortOrder]);
 
   const startBlank = (templateId = 'minimal-executive') => {
     const newInvoice = {
@@ -84,13 +116,10 @@ export function Dashboard() {
       }
 
       if (generatedData) {
-        const parsed = AIResponseSchema.safeParse(generatedData);
-        if (!parsed.success) {
-          console.error('AI response validation failed:', parsed.error);
+        const validData = validateAIResponse(generatedData);
+        if (!validData) {
           throw new Error('AI returned invalid data');
         }
-        
-        const validData = parsed.data;
         const newInvoice = {
           id: generateId(),
           invoiceNumber: `INV-${Date.now().toString(36).toUpperCase()}`,
@@ -202,16 +231,61 @@ export function Dashboard() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
               <FileText className="w-4 h-4" /> Active Documents
             </h2>
+
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search invoices..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-zinc-600"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="all">All Status</option>
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+
+              {/* Sort */}
+              <select
+                value={`${sortBy}-${sortOrder}`}
+                onChange={e => {
+                  const [by, order] = e.target.value.split('-');
+                  setSortBy(by as any);
+                  setSortOrder(order as any);
+                }}
+                className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
+                <option value="amount-desc">Highest Amount</option>
+                <option value="amount-asc">Lowest Amount</option>
+                <option value="name-asc">Client A→Z</option>
+                <option value="name-desc">Client Z→A</option>
+              </select>
+            </div>
             
-            {invoices.length === 0 ? (
+            {filteredInvoices.length === 0 ? (
               <div className="text-center py-20 bg-zinc-900/40 rounded-3xl border border-zinc-800/50 border-dashed">
                 <FileText className="w-16 h-16 text-zinc-800 mx-auto mb-4" />
-                <p className="text-zinc-300 font-medium text-lg">Your workspace is empty</p>
-                <p className="text-zinc-500 text-sm mt-2">Start a new document above</p>
+                <p className="text-zinc-300 font-medium text-lg">No documents found</p>
+                <p className="text-zinc-500 text-sm mt-2">Adjust your filters or start a new document above</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {invoices.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).map(invoice => (
+                {filteredInvoices.map(invoice => (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                     key={invoice.id} onClick={() => navigate(`/editor/${invoice.id}`)} 
@@ -221,7 +295,7 @@ export function Dashboard() {
                        <div>
                          <span className="bg-zinc-800 text-zinc-300 text-[10px] font-bold px-2 py-1 rounded inline-block uppercase tracking-wider mb-3">{invoice.status}</span>
                          <h3 className="font-medium text-lg text-zinc-100 group-hover:text-indigo-400 transition-colors">{invoice.title || 'Untitled'}</h3>
-                         <p className="text-xs text-zinc-500 font-mono mt-1">ID: {invoice.id}</p>
+                         <p className="text-xs text-zinc-500 font-mono mt-1">#: {invoice.invoiceNumber}</p>
                        </div>
                        <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-serif text-zinc-400">
                          {invoice.customerInfo.name ? invoice.customerInfo.name.charAt(0).toUpperCase() : '?'}

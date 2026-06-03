@@ -530,6 +530,36 @@ numpy>=1.26
 - `vite.config.ts`
 - `tsconfig.json`
 
+## 8. Authentication System — NEW
+
+### 8.1 Dependencies Added
+- `jsonwebtoken` ^9.x — JWT sign/verify
+- `bcryptjs` ^2.x — Password hashing
+
+### 8.2 New Routes
+- `POST /api/v1/auth/register` — Create user account
+- `POST /api/v1/auth/login` — Authenticate and receive tokens
+- `POST /api/v1/auth/refresh` — Exchange refresh token for new pair
+- `GET /api/v1/auth/me` — Get current user profile
+- `POST /api/v1/invoices/:id/validate` — Server-side invoice validation
+
+### 8.3 Modified Middleware
+- `requireAuth()` — Now supports JWT Bearer + API key dual strategy
+- `withRetry()` — Returns typed `TypedRetryError` with Ollama error categories
+
+## 9. Financial Integrity — Decimal Migration
+
+### Files Modified
+- `src/lib/calculations.ts` — ALL functions migrated to Decimal.js internals
+- `src/lib/utils.ts` — `formatCurrency()` now validates currency codes, accepts `Decimal|number`
+- `src/types.ts` — `currency` field type annotation updated
+- `src/pages/Dashboard.tsx` — `invoice.id` → `invoice.invoiceNumber` display
+- `src/components/InvoicePreview.tsx` — Remove `invoice.id` fallback
+- `src/pages/Editor.tsx` — Footer display uses `invoiceNumber`
+
+### Dependencies Added
+- `decimal.js` ^10.x
+
 ---
 
 *End of Diff Document*

@@ -22,7 +22,7 @@ export function InvoicePreview({ invoice }: InvoicePreviewProps) {
             </div>
             <h2 className="text-3xl font-light tracking-tight">Invoice</h2>
             {/* Issue 2.1: Display invoiceNumber, not internal id */}
-            <p className="text-slate-400 text-xs mt-1">#{(invoice.invoiceNumber || invoice.id).toUpperCase()}</p>
+            <p className="text-slate-400 text-xs mt-1">#{(invoice.invoiceNumber || 'DRAFT').toUpperCase()}</p>
           </div>
           <div className="text-right">
             <div className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Billed To</div>

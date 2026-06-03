@@ -10,11 +10,31 @@ export function generateId(): string {
   return crypto.randomUUID();
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount);
+import { SUPPORTED_CURRENCIES, CurrencyCode } from '../types';
+import Decimal from 'decimal.js';
+
+export function formatCurrency(amount: number | Decimal, currency: string = 'USD'): string {
+  // Convert Decimal to number if needed
+  const numericAmount = amount instanceof Decimal ? amount.toNumber() : amount;
+
+  // Validate currency code against supported list
+  const validCurrency: string = (SUPPORTED_CURRENCIES as readonly string[]).includes(currency)
+    ? currency
+    : (() => {
+        console.warn(`[formatCurrency] Invalid currency code "${currency}" — falling back to USD.`);
+        return 'USD';
+      })();
+
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: validCurrency,
+    }).format(numericAmount);
+  } catch (err) {
+    // Final safety net for any Intl.NumberFormat edge case
+    console.warn(`[formatCurrency] Intl.NumberFormat failed for "${validCurrency}":`, err);
+    return `$${numericAmount.toFixed(2)}`;
+  }
 }
 
 export function formatDate(dateStr: string): string {

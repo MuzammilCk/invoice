@@ -23,7 +23,7 @@ export function SidebarNav() {
     .toUpperCase() ?? 'U';
 
   return (
-    <aside className="w-20 flex flex-col items-center py-8 border-r border-zinc-800 bg-zinc-900/50 flex-shrink-0 z-20 h-screen">
+    <aside className="sidebar-nav w-20 flex flex-col items-center py-8 border-r border-zinc-800 bg-zinc-900/50 flex-shrink-0 z-20 h-screen">
       <div className="mb-12">
         <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xl tracking-tighter text-white shadow-lg shadow-indigo-500/20">
           AI

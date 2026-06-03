@@ -5,28 +5,15 @@ import { generateId } from '../lib/utils';
 import { Send, FileText, CheckCircle2, Sparkles, Languages, Bot, Mic, Square } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { z } from 'zod';
+import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
+import { AIChangeDiff } from './AIChangeDiff';
+import { buildClientContext } from '../lib/ai-context';
+import { AISpeedBadge } from './AISpeedBadge';
 
 interface AIFormProps {
   onGenerate: (data: Partial<Invoice>) => void;
 }
 
-// Issue 5.3: Zod schema for validating AI responses
-const AIResponseSchema = z.object({
-  customerInfo: z.object({
-    name: z.string().max(200).optional().catch(undefined),
-    email: z.string().max(200).optional().catch(undefined),
-    address: z.string().max(500).optional().catch(undefined),
-  }).optional(),
-  items: z.array(z.object({
-    description: z.string().max(500),
-    quantity: z.number().positive().max(100_000),
-    rate: z.number().min(0).max(1_000_000),
-  })).min(1).max(100),
-  taxRate: z.number().min(0).max(100).optional().default(0),
-  notes: z.string().max(2000).optional().default(''),
-});
-
-// Issue 5.2: Strip PII before sending to Gemini
 function stripPII(invoice: Invoice): object {
   return {
     items: invoice.items.map(i => ({
@@ -37,11 +24,9 @@ function stripPII(invoice: Invoice): object {
     taxRate: invoice.taxRate,
     currency: invoice.currency,
     notes: invoice.notes,
-    // NO customerInfo, NO businessInfo, NO id
   };
 }
 
-// Issue 7.6: Max prompt length
 const MAX_PROMPT_LENGTH = 1500;
 
 export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
@@ -56,26 +41,38 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const [auditMessage, setAuditMessage] = useState('');
   const [error, setError] = useState('');
   
+  // New State for SSE and Pipeline
+  const [pendingChanges, setPendingChanges] = useState<Partial<Invoice> | null>(null);
+  const [streamingContent, setStreamingContent] = useState('');
+  const [streamingStage, setStreamingStage] = useState<'idle' | 'generating' | 'parsing' | 'reviewing'>('idle');
+  const [transcript, setTranscript] = useState('');
+  const [detectedLanguage, setDetectedLanguage] = useState('');
+  const [voiceStage, setVoiceStage] = useState<'idle' | 'recording' | 'transcribing' | 'reviewing' | 'applying'>('idle');
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const speechRecognitionRef = useRef<any>(null);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !invoice) return;
-    
-    setIsGenerating(true);
+
+    setStreamingStage('generating');
+    setStreamingContent('');
     setError('');
 
     try {
-      // Issue 5.2: Only send structural data, not PII
       const invoiceContext = stripPII(invoice);
+      let clientContext = null;
+      if (invoice.customerInfo?.name) {
+        clientContext = buildClientContext(invoices, invoice.customerInfo.name);
+      }
 
-      const response = await fetch('/api/v1/generate-invoice', {
+      const response = await fetch('/api/v1/generate-invoice-stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          prompt: `Current invoice items and settings: ${JSON.stringify(invoiceContext)}. User request: ${prompt}. Return only the updated items/taxRate/notes — do NOT return customer or business fields.` 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Current invoice context: ${JSON.stringify(invoiceContext)}. User request: ${prompt}. Return updated fields.`,
+          clientContext,
         }),
       });
 
@@ -84,37 +81,86 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
         throw new Error(errorData.error || 'Failed to generate');
       }
 
-      const data = await response.json();
-      
-      // Issue 5.3: Validate AI response with Zod
-      const parsed = AIResponseSchema.safeParse(data);
-      if (!parsed.success) {
-        console.error('AI response validation failed:', parsed.error);
-        setError('AI returned invalid data. Please try rephrasing your request.');
-        return;
+      // ── Read SSE stream ──
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) throw new Error('No response stream');
+
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.slice(7);
+            continue; // Event type tracking (optional)
+          }
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.stage) {
+                setStreamingStage(data.stage === 'parsing' ? 'parsing' : 'generating');
+              }
+
+              if (data.partial) {
+                setStreamingContent(data.partial);
+              }
+
+              if (data.error) {
+                setError(data.error);
+                setStreamingStage('idle');
+                return;
+              }
+
+              // Final result — stage to pending changes
+              if (data.customerInfo || data.items) {
+                const validated = validateAIResponse(data);
+                if (!validated) {
+                  setError('AI returned invalid data. Please try rephrasing.');
+                  setStreamingStage('idle');
+                  return;
+                }
+
+                const mappedData: Partial<Invoice> = {
+                  ...(validated.customerInfo ? {
+                    customerInfo: {
+                      name: validated.customerInfo.name || '',
+                      email: validated.customerInfo.email || '',
+                      address: validated.customerInfo.address || '',
+                    }
+                  } : {}),
+                  items: validated.items.map(item => ({ ...item, id: generateId() })),
+                  taxRate: validated.taxRate,
+                  notes: validated.notes,
+                  ...(validated.templateId ? { templateId: validated.templateId } : {}),
+                  ...(validated.currency ? { currency: validated.currency } : {}),
+                  ...(validated.title ? { title: validated.title } : {}),
+                  ...(validated.themeColor ? { themeColor: validated.themeColor } : {}),
+                  ...(validated.discountRate !== undefined ? { discountRate: validated.discountRate } : {}),
+                  ...(validated.dueDate ? { dueDate: validated.dueDate } : {}),
+                  ...(validated.shipping !== undefined ? { shipping: validated.shipping } : {}),
+                };
+
+                setPendingChanges(mappedData);
+                setStreamingStage('reviewing');
+              }
+            } catch {}
+          }
+        }
       }
 
-      const validData = parsed.data;
-      const mappedData: Partial<Invoice> = {
-        customerInfo: validData.customerInfo ? {
-          name: validData.customerInfo.name || '',
-          email: validData.customerInfo.email || '',
-          address: validData.customerInfo.address || '',
-        } : undefined,
-        items: validData.items.map((item) => ({
-          ...item,
-          id: generateId()
-        })),
-        taxRate: validData.taxRate,
-        notes: validData.notes,
-      };
-
-      onGenerate(mappedData);
       setPrompt('');
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setIsGenerating(false);
+      setStreamingStage('idle');
     }
   };
 
@@ -124,23 +170,54 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      setVoiceStage('recording');
+      setIsRecording(true);
+      setTranscript('');
+      setDetectedLanguage('');
 
+      // ── Start Web Speech API for visual feedback (browser-side only) ──
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = ''; // Auto-detect
+
+        recognition.onresult = (event: any) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            interimTranscript += event.results[i][0].transcript;
+          }
+          setTranscript(interimTranscript);
+        };
+
+        speechRecognitionRef.current = recognition;
+        recognition.start();
+      }
+
+      // ── Start actual recording ──
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = async () => {
+        // Stop Web Speech API
+        if (speechRecognitionRef.current) {
+          speechRecognitionRef.current.stop();
+          speechRecognitionRef.current = null;
+        }
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setVoiceStage('transcribing');
         await handleAudioGenerate(audioBlob);
         stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
-      setIsRecording(true);
     } catch (err: any) {
       setError('Microphone access denied or unavailable.');
+      setVoiceStage('idle');
+      setIsRecording(false);
     }
   };
 
@@ -156,12 +233,11 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     setIsGenerating(true);
     setError('');
     try {
-      // Issue 5.2: Strip PII from audio prompt context
       const invoiceContext = stripPII(invoice);
 
       const formData = new FormData();
       formData.append('audio', audioBlob);
-      formData.append('prompt', `Current invoice items and settings: ${JSON.stringify(invoiceContext)}. The user is dictating instructions to update this invoice. Process the audio, apply the updates, and return the JSON schema. Do NOT include customer or business info.`);
+      formData.append('prompt', `Current invoice context: ${JSON.stringify(invoiceContext)}. User dictation to update. Return only JSON schema.`);
       
       const response = await fetch('/api/v1/audio-to-invoice', {
         method: 'POST',
@@ -175,32 +251,38 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
 
       const data = await response.json();
 
-      // Issue 5.3: Validate AI response
-      const parsed = AIResponseSchema.safeParse(data);
-      if (!parsed.success) {
-        console.error('AI audio response validation failed:', parsed.error);
+      const validated = validateAIResponse(data);
+      if (!validated) {
         setError('AI returned invalid data from audio. Please try again.');
         return;
       }
 
-      const validData = parsed.data;
       const mappedData: Partial<Invoice> = {
-        customerInfo: validData.customerInfo ? {
-          name: validData.customerInfo.name || '',
-          email: validData.customerInfo.email || '',
-          address: validData.customerInfo.address || '',
-        } : undefined,
-        items: validData.items.map((item) => ({
-          ...item,
-          id: generateId()
-        })),
-        taxRate: validData.taxRate,
-        notes: validData.notes,
+        ...(validated.customerInfo ? {
+          customerInfo: {
+            name: validated.customerInfo.name || '',
+            email: validated.customerInfo.email || '',
+            address: validated.customerInfo.address || '',
+          }
+        } : {}),
+        items: validated.items.map(item => ({ ...item, id: generateId() })),
+        taxRate: validated.taxRate,
+        notes: validated.notes,
+        ...(validated.templateId ? { templateId: validated.templateId } : {}),
+        ...(validated.currency ? { currency: validated.currency } : {}),
+        ...(validated.title ? { title: validated.title } : {}),
+        ...(validated.themeColor ? { themeColor: validated.themeColor } : {}),
+        ...(validated.discountRate !== undefined ? { discountRate: validated.discountRate } : {}),
+        ...(validated.dueDate ? { dueDate: validated.dueDate } : {}),
+        ...(validated.shipping !== undefined ? { shipping: validated.shipping } : {}),
       };
 
-      onGenerate(mappedData);
+      setPendingChanges(mappedData);
+      setVoiceStage('reviewing');
+      setStreamingStage('reviewing');
     } catch (err: any) {
       setError(err.message);
+      setVoiceStage('idle');
     } finally {
       setIsGenerating(false);
     }
@@ -252,14 +334,16 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   };
 
   return (
-    <div className="w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/40 flex-shrink-0 h-full overflow-hidden shadow-xl z-20 relative">
+    <div className="ai-sidebar w-[320px] border-r border-zinc-800 flex flex-col bg-zinc-900/40 flex-shrink-0 h-full overflow-hidden shadow-xl z-20 relative">
       <div className="p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar">
         <div className="mb-6">
-          <label className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 mb-4">
-            <Bot className="w-4 h-4 text-indigo-400" /> AI Workbench
-          </label>
+          <div className="flex items-center justify-between mb-4">
+            <label className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
+              <Bot className="w-4 h-4 text-indigo-400" /> AI Workbench
+            </label>
+            <AISpeedBadge />
+          </div>
           <div className="space-y-3">
-            {/* Issue 7.6: maxLength on prompt textarea + character counter */}
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value.substring(0, MAX_PROMPT_LENGTH))}
@@ -275,10 +359,10 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
             <div className="flex gap-2">
               <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !prompt.trim()}
+                disabled={streamingStage !== 'idle' || !prompt.trim()}
                 className="flex-1 p-3 rounded-xl bg-indigo-600/10 border border-indigo-500/20 hover:bg-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-indigo-100 text-sm font-semibold shadow-sm"
               >
-                {isGenerating && prompt.trim() ? (
+                {streamingStage !== 'idle' && streamingStage !== 'reviewing' && prompt.trim() ? (
                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -291,13 +375,72 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
               
               <button
                 onClick={isRecording ? stopRecording : startRecording}
-                disabled={isGenerating && !isRecording}
+                disabled={streamingStage !== 'idle' && !isRecording}
                 className={`p-3 rounded-xl border transition-all flex items-center justify-center w-12 ${isRecording ? 'bg-red-500/20 border-red-500/50 text-red-500 animate-pulse' : 'bg-zinc-800/40 border-zinc-700/50 hover:bg-zinc-800/80 text-zinc-400 hover:text-zinc-200'}`}
                 title={isRecording ? 'Stop Recording' : 'Dictate Instructions'}
               >
                  {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
               </button>
             </div>
+            
+            {/* 3-Stage Voice Pipeline Feedback */}
+            {voiceStage !== 'idle' && (
+              <div className="mt-3 p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/50">
+                {/* Stage 1: Recording with live transcript */}
+                {voiceStage === 'recording' && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                      <span className="text-xs font-semibold text-red-400">Recording...</span>
+                    </div>
+                    {transcript && (
+                      <p className="text-xs text-zinc-300 bg-zinc-900/50 p-2 rounded italic leading-relaxed">
+                        "{transcript}"
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Stage 2: Transcribing */}
+                {voiceStage === 'transcribing' && (
+                  <div className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-indigo-400" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    <span className="text-xs text-zinc-400">Transcribing with Whisper (high accuracy)...</span>
+                  </div>
+                )}
+
+                {/* Language badge */}
+                {detectedLanguage && (
+                  <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/30 rounded-full">
+                    <span className="text-[10px] font-bold text-indigo-300">
+                      {detectedLanguage.toUpperCase()} detected
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* AI Change Diff Panel */}
+            {pendingChanges && invoice && (
+              <AIChangeDiff
+                currentInvoice={invoice}
+                proposedChanges={pendingChanges}
+                onApply={(accepted) => {
+                  onGenerate(accepted);
+                  setPendingChanges(null);
+                  setStreamingStage('idle');
+                  setVoiceStage('idle');
+                }}
+                onReject={() => {
+                  setPendingChanges(null);
+                  setStreamingStage('idle');
+                  setVoiceStage('idle');
+                }}
+              />
+            )}
           </div>
         </div>
 

@@ -77,7 +77,7 @@ export interface Invoice {
   notes: string;
   templateId: string;
   themeColor: string;
-  currency: string;              // Kept as string for backward compat; new invoices use CurrencyCode
+  currency: CurrencyCode | string; // Accept CurrencyCode for new invoices; string for backward compat
   paymentTerms?: PaymentTerms;   // Issue 2.6
   customPaymentTerms?: string;   // Issue 2.6: Used when paymentTerms === 'custom'
   displaySettings: DisplaySettings;

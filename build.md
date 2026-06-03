@@ -573,6 +573,56 @@ curl -X POST http://localhost:3000/api/v1/generate-invoice \
   -d '{"prompt": "दो घंटे वेब डिजाइन काम, 150 रुपये प्रति घंटा"}'
 ```
 
+## BUILD STEP 9: Install Auth Dependencies
+
+```bash
+npm install jsonwebtoken bcryptjs
+npm install -D @types/jsonwebtoken @types/bcryptjs
+```
+
+Add to `.env`:
+```env
+JWT_SECRET="your-secure-secret-here"
+JWT_EXPIRES_IN="24h"
+JWT_REFRESH_EXPIRES_IN="7d"
+```
+
+## BUILD STEP 10: Install Decimal.js
+
+```bash
+npm install decimal.js
+```
+
+No additional configuration required. Decimal.js ships with TypeScript declarations.
+
+## BUILD STEP 11: PDF System Migration
+
+```bash
+npm install puppeteer
+# After verification:
+npm uninstall html-to-image jspdf html2canvas
+```
+
+Puppeteer will download Chromium (~280MB) on first install.
+Subsequent installs use cached binary.
+
+## BUILD STEP 12: Intelligence Dependencies
+
+```bash
+npm install tesseract.js node-cron
+npm install -D @types/node-cron
+```
+
+## BUILD STEP 13: Cloud Fallback (Optional)
+
+Add to `.env`:
+```env
+GROQ_API_KEY=""
+GROQ_MODEL="llama-3.1-8b-instant"
+```
+
+Get a free API key at https://console.groq.com/keys
+
 ---
 
 *End of Build Guide*

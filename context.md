@@ -80,7 +80,7 @@ Local Services:
 | `src/main.tsx` | React entry point |
 | `src/types.ts` | TypeScript interfaces (Invoice, InvoiceItem, etc.) |
 | `src/store/useStore.ts` | Zustand store with localStorage persistence + undo/redo |
-| `src/lib/calculations.ts` | Financial math (subtotal, tax, discount, total) |
+| `src/lib/calculations.ts` | Financial math — **Decimal.js** (subtotal, tax, discount, total) |
 | `src/lib/templates.ts` | Invoice template definitions |
 | `src/lib/utils.ts` | ID generation, formatting utilities |
 | `src/components/AIAssistantSidebar.tsx` | AI prompt UI, audio recording, Zod validation |
@@ -90,6 +90,11 @@ Local Services:
 | `src/components/SidebarNav.tsx` | Navigation sidebar |
 | `src/pages/Dashboard.tsx` | Invoice list, AI creation modal |
 | `src/pages/Editor.tsx` | Invoice editor, PDF export |
+| `src/pages/Settings.tsx` | Business profile and app defaults |
+| `src/pages/Clients.tsx` | Client directory extracted from invoices |
+| `src/pages/Templates.tsx` | Template gallery with live previews |
+| `src/pages/Onboarding.tsx` | First-run 3-step wizard |
+| `src/pages/SharedInvoice.tsx` | Public read-only invoice view |
 
 ### 4.3 Configuration
 
@@ -216,6 +221,15 @@ const response = await withGeminiRetry(() =>
 | **Multilingual** | Good (Gemini) | Excellent (Qwen3 119 langs) |
 | **Fine-tuning** | Not possible (cloud API) | Full LoRA support |
 | **Vendor lock-in** | Google SDK | OpenAI-compatible (portable) |
+
+## 9. Authentication Architecture
+
+The application uses a dual-strategy authentication system:
+- **JWT Tokens:** For web application users. `POST /auth/login` → access + refresh tokens.
+- **API Keys:** For self-hosted/CLI deployments. `X-API-Key` header with `API_SECRET` env var.
+
+In development with no `JWT_SECRET` configured, auth is bypassed for DX.
+In production, `JWT_SECRET` is required or the server exits.
 
 ---
 

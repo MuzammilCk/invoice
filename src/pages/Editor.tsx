@@ -2,13 +2,13 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AIAssistantSidebar } from '../components/AIAssistantSidebar';
 import { EditableInvoice } from '../components/EditableInvoice';
+import { SyncIndicator } from '../components/SyncIndicator';
 import { useStore } from '../store/useStore';
 import { TEMPLATES } from '../lib/templates';
 import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
-import * as htmlToImage from 'html-to-image';
-import jsPDF from 'jspdf';
+
 // Issue 6.2: CSS moved to external file — no more dangerouslySetInnerHTML
 import '../styles/invoice-export.css';
 
@@ -59,8 +59,8 @@ export function Editor() {
   const [zoom, setZoom] = useState(0.8);
   
   const invoice = invoices.find(inv => inv.id === id);
-
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<string>('');
 
   if (!invoice) {
     return <div className="flex h-screen items-center justify-center text-zinc-400">Invoice not found.</div>;
@@ -76,48 +76,68 @@ export function Editor() {
     });
   };
 
-  // Issue 6.1: Improved PDF export (interim — uses PNG for better quality)
   const handlePrint = async () => {
-    if (!printRef.current || isGeneratingPDF) return;
-    
+    if (isGeneratingPDF) return;
     setIsGeneratingPDF(true);
+    setPdfProgress('Validating invoice...');
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 50));
-      const element = printRef.current;
-      
-      // Use PNG instead of JPEG for sharper text; higher pixelRatio for better resolution
-      const imgData = await htmlToImage.toPng(element, {
-        quality: 1.0,
-        pixelRatio: 3,
-        backgroundColor: '#ffffff',
-        style: {
-          transform: 'none',
-          width: '210mm',
-          minHeight: '297mm',
-          margin: '0',
-          padding: '0',
-          boxShadow: 'none'
+      // ── Step 1: Validate invoice before export ──
+      const validationRes = await fetch(`/api/v1/invoices/${invoice.id}/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice }),
+      });
+
+      if (validationRes.ok) {
+        const validation = await validationRes.json();
+        if (!validation.valid && invoice.status !== 'draft') {
+          const errorMessages = validation.issues
+            .filter((i: any) => i.severity === 'error')
+            .map((i: any) => i.message)
+            .join('\\n• ');
+          alert(`Cannot export — please fix these issues:\\n\\n• ${errorMessages}`);
+          return;
         }
+      }
+
+      // ── Step 2: Request server-side PDF ──
+      setPdfProgress('Generating PDF...');
+
+      const response = await fetch(`/api/v1/invoices/${invoice.id}/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invoice }),
       });
-      
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-      
-      pdf.addImage(imgData, 'PNG', 0, 0, 210, 297);
-      pdf.save(`${invoice.title || 'Invoice'}.pdf`);
-    } catch (error) {
-      console.error("PDF generation failed", error);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'PDF generation failed' }));
+        throw new Error(errorData.error || `PDF generation failed (${response.status})`);
+      }
+
+      // ── Step 3: Download the PDF ──
+      setPdfProgress('Downloading...');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${invoice.title || 'Invoice'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+    } catch (error: any) {
+      console.error('PDF export failed:', error);
+      alert(`PDF export failed: ${error.message}`);
     } finally {
       setIsGeneratingPDF(false);
+      setPdfProgress('');
     }
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="editor-layout flex h-screen overflow-hidden">
       {/* Left AI Sidebar */}
       <AIAssistantSidebar onGenerate={handleHandleAIGeneration} />
 
@@ -140,7 +160,8 @@ export function Editor() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 mr-2">
+            <SyncIndicator />
+            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 mx-2">
               <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Undo">
                 <Undo2 className="w-4 h-4" />
               </button>
@@ -155,12 +176,12 @@ export function Editor() {
               className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGeneratingPDF ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
-              {isGeneratingPDF ? 'Exporting...' : 'Export PDF'}
+              {pdfProgress || 'Export PDF'}
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto bg-zinc-950/80 relative custom-scrollbar">
+        <div className="invoice-canvas-container flex-1 overflow-auto bg-zinc-950/80 relative custom-scrollbar">
           {/* Floating Zoom Controls */}
           <div className="fixed bottom-16 right-[340px] flex items-center bg-zinc-800 backdrop-blur-md rounded-full p-1.5 border border-zinc-700 shadow-2xl z-[100] print:hidden hidden md:flex">
              <button onClick={() => setZoom(Math.max(0.3, zoom - 0.1))} className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-700 transition-colors">
@@ -194,7 +215,7 @@ export function Editor() {
         <footer className="h-10 px-6 flex flex-shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-900 text-[10px] text-zinc-500">
           <div className="flex gap-4">
             <span className="flex items-center gap-1.5 font-medium text-zinc-400"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> Saved</span>
-            <span className="text-zinc-500 hidden sm:inline">Project ID: {invoice.id}</span>
+            <span className="text-zinc-500 hidden sm:inline">Invoice: {invoice.invoiceNumber}</span>
           </div>
         </footer>
       </div>

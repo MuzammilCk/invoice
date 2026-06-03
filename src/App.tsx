@@ -1,11 +1,24 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { SidebarNav } from './components/SidebarNav';
 import { Dashboard } from './pages/Dashboard';
 import { Editor } from './pages/Editor';
-import { Users, LayoutTemplate, Settings } from 'lucide-react';
+import { SettingsPage } from './pages/Settings';
+import { ClientsPage } from './pages/Clients';
+import { TemplatesPage } from './pages/Templates';
+import { OnboardingPage } from './pages/Onboarding';
+import { SharedInvoicePage } from './pages/SharedInvoice';
 
 function Layout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!localStorage.getItem('onboarding_complete') && location.pathname !== '/onboarding') {
+      navigate('/onboarding');
+    }
+  }, [navigate, location]);
+
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
       <SidebarNav />
@@ -34,12 +47,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/shared/:token" element={<SharedInvoicePage />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="editor/:id" element={<Editor />} />
-          <Route path="clients" element={<EmptyState icon={Users} title="Client Directory" description="Manage your client profiles, addresses, and payment history in one place. Module unlocking soon." />} />
-          <Route path="templates" element={<EmptyState icon={LayoutTemplate} title="Brand Templates" description="Design custom document templates and themes for your organization. Premium gallery incoming." />} />
-          <Route path="settings" element={<EmptyState icon={Settings} title="Workspace Settings" description="Configure your API keys, integrations, and default business preferences." />} />
+          <Route path="clients" element={<ClientsPage />} />
+          <Route path="templates" element={<TemplatesPage />} />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
