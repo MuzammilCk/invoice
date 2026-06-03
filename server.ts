@@ -34,6 +34,7 @@ const STT_URL = `http://127.0.0.1:${STT_PORT}`;
 
 const ollama = new OpenAI({
   baseURL: `${OLLAMA_HOST}/v1`,
+  apiKey: 'ollama', // Required by the OpenAI SDK even for local Ollama
 });
 
 // ── Supabase Configuration ──
