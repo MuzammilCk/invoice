@@ -330,9 +330,9 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
               <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/50 text-white">
                  <Sparkles className="w-3.5 h-3.5" />
               </div>
-              <span className="text-sm font-bold text-zinc-100">Gemini 2.5 Flash</span>
+              <span className="text-sm font-bold text-zinc-100">Local AI (Qwen3)</span>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed italic">"You can type or speak instructions to modify your invoice, and I will instantly update the document data."</p>
+            <p className="text-xs text-zinc-400 leading-relaxed italic">"Powered by local AI. Type or speak in any language — Hindi, Tamil, Telugu, Malayalam, and 100+ more — to update your invoice."</p>
           </div>
         </div>
       </div>

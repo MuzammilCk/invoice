@@ -1,0 +1,4 @@
+flask>=3.0
+faster-whisper>=1.0
+numpy>=1.26
+hf_xet>=0.1.0

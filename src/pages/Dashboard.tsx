@@ -321,7 +321,7 @@ export function Dashboard() {
                        <Mic className={`w-10 h-10 ${isRecording ? 'animate-pulse' : ''}`} />
                      </button>
                      <div className="mt-6 text-center">
-                       {isRecording ? <p className="text-red-400 font-medium animate-pulse flex items-center gap-2"><div className="w-2 h-2 bg-red-500 rounded-full"></div> Recording in progress...</p> : audioBlob ? <p className="text-emerald-400 font-medium">Audio recorded. Ready to process.</p> : <p className="text-zinc-500">Tap to start recording</p>}
+                       {isRecording ? <p className="text-red-400 font-medium animate-pulse flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full"></span> Recording in progress...</p> : audioBlob ? <p className="text-emerald-400 font-medium">Audio recorded. Ready to process.</p> : <p className="text-zinc-500">Tap to start recording</p>}
                      </div>
                    </div>
                  )}
