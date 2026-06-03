@@ -1,0 +1,67 @@
+Step 1: Install Prerequisites (YOU do this manually)
+These are system-level installations that I can't do for you:
+
+1a. Install Ollama
+
+winget install Ollama.Ollama
+Or download from https://ollama.com/download/windows — install it, then restart your terminal.
+
+1b. Pull the Qwen3 model (~4.9GB download)
+
+ollama pull qwen3:8b
+1c. Start Ollama (if it didn't auto-start)
+
+ollama serve
+1d. Quick test — make sure Ollama responds:
+
+ollama run qwen3:8b "Return this JSON: {\"test\": true}"
+If you get JSON back, Ollama is working.
+
+1e. Install Python 3.10+ (if not already installed)
+
+python --version
+If missing: winget install Python.Python.3.12
+
+1f. Install ffmpeg (required for audio processing)
+
+choco install ffmpeg
+Or winget install Gyan.FFmpeg
+
+1g. Install Python dependencies
+
+pip install faster-whisper flask numpy
+Step 2: Tell Me To Execute (I do the code changes)
+Once your prerequisites are installed and Ollama is running, just tell me:
+
+"Execute the migration"
+
+I will then:
+
+Create stt_server.py (new file)
+Create requirements.txt (new file)
+Run npm uninstall @google/genai and npm install openai
+Refactor server.ts (replace all 3 Gemini routes with Ollama + STT sidecar)
+Update .env and .env.example
+Update the AIAssistantSidebar.tsx label
+Run npm run dev to test everything
+This is the build.md being executed — all the code is ready in that document.
+
+Step 3: Test Together
+After I make the code changes, we'll verify:
+
+curl localhost:3000/api/v1/health → checks Ollama + STT are alive
+Text-to-invoice in English
+Text-to-invoice in Hindi/Tamil
+Audio recording → invoice
+Notes rewrite
+Error handling (what happens if Ollama is stopped)
+⚡ TL;DR — Your Action Items Right Now:
+#	What	Command	Time
+1	Install Ollama	winget install Ollama.Ollama	2 min
+2	Pull model	ollama pull qwen3:8b	5-10 min (download)
+3	Start Ollama	ollama serve	1 sec
+4	Verify Python	python --version (need 3.10+)	1 sec
+5	Install ffmpeg	choco install ffmpeg	1 min
+6	Install Python deps	pip install faster-whisper flask numpy	2 min
+7	Come back and say "Execute the migration"	—	—
+Once you confirm the prerequisites are ready, I'll execute everything in one shot. Want to start installing?
