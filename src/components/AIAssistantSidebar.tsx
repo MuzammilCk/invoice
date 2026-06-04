@@ -10,6 +10,7 @@ import { AIChangeDiff } from './AIChangeDiff';
 import { buildClientContext } from '../lib/ai-context';
 import { AISpeedBadge } from './AISpeedBadge';
 import { TranscriptReviewPanel } from './TranscriptReviewPanel';
+import { apiClient } from '../lib/apiClient';
 
 interface AIFormProps {
   onGenerate: (data: Partial<Invoice>) => void;
@@ -71,7 +72,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
         clientContext = buildClientContext(invoices, invoice.customerInfo.name);
       }
 
-      const response = await fetch('/api/v1/generate-invoice-stream', {
+      const response = await apiClient('/api/v1/generate-invoice-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,7 +243,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       formData.append('audio', audioBlob);
 
       // Stage 1: Transcribe audio → get transcript + language + confidence
-      const response = await fetch('/api/v1/transcribe-audio', {
+      const response = await apiClient('/api/v1/transcribe-audio', {
         method: 'POST',
         body: formData
       });
@@ -278,7 +279,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     try {
       const invoiceContext = stripPII(invoice);
 
-      const response = await fetch('/api/v1/text-to-invoice-from-transcript', {
+      const response = await apiClient('/api/v1/text-to-invoice-from-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -352,7 +353,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     setError('');
 
     try {
-      const response = await fetch(`/api/v1/invoices/${invoice.id}/validate`, {
+      const response = await apiClient(`/api/v1/invoices/${invoice.id}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice }),
@@ -383,7 +384,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     setError('');
     
     try {
-      const response = await fetch('/api/v1/rewrite', {
+      const response = await apiClient('/api/v1/rewrite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

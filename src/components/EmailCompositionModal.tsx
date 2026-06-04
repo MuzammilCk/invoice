@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Mail, Send, Paperclip, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
+import { apiClient } from '../lib/apiClient';
 
 interface EmailCompositionModalProps {
   invoice: Invoice;
@@ -29,7 +30,7 @@ export function EmailCompositionModal({ invoice, isOpen, onClose }: EmailComposi
     setErrorMessage('');
 
     try {
-      const res = await fetch(`/api/v1/invoices/${invoice.id}/send-email`, {
+      const res = await apiClient(`/api/v1/invoices/${invoice.id}/send-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

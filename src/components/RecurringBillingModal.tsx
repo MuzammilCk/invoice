@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
 import { formatCurrency, formatDate } from '../lib/utils';
 import { computeInvoiceTotals } from '../lib/calculations';
+import { apiClient } from '../lib/apiClient';
 
 interface RecurringSchedule {
   id: string;
@@ -37,7 +38,7 @@ export function RecurringBillingModal({ invoice, isOpen, onClose }: RecurringBil
   const loadSchedules = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/v1/schedules');
+      const res = await apiClient('/api/v1/schedules');
       if (res.ok) {
         const data = await res.json();
         const schedule = data.schedules?.find((s: any) => s.templateInvoiceId === invoice.id);
@@ -59,7 +60,7 @@ export function RecurringBillingModal({ invoice, isOpen, onClose }: RecurringBil
   const handleCreate = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/invoices/${invoice.id}/schedule`, {
+      const res = await apiClient(`/api/v1/invoices/${invoice.id}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ frequency, autoSend })
@@ -77,7 +78,7 @@ export function RecurringBillingModal({ invoice, isOpen, onClose }: RecurringBil
     if (!activeSchedule) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/schedules/${activeSchedule.id}`, { method: 'DELETE' });
+      const res = await apiClient(`/api/v1/schedules/${activeSchedule.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to cancel schedule');
       setActiveSchedule(null);
     } catch (err) {

@@ -603,7 +603,7 @@ async function startServer() {
           styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
           fontSrc: ["'self'", 'fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:'],
-          connectSrc: ["'self'", "ws://localhost:24678", "wss://localhost:24678"],
+          connectSrc: ["'self'", "ws://localhost:24678", "wss://localhost:24678", "https://*.supabase.co", "wss://*.supabase.co"],
         },
       },
     })
@@ -943,10 +943,7 @@ EXPANDED FIELD RULES:
     }
   });
 
-  // Apply auth to all subsequent routes
-  v1.use(requireAuth);
-
-  // ── Route: Health Check ──
+  // Auth applied after public endpoints
   v1.get('/health', async (_req, res) => {
     let ollamaOk = false;
     let sttOk = false;
@@ -1030,6 +1027,10 @@ EXPANDED FIELD RULES:
       },
     });
   });
+
+  // Apply auth to all subsequent routes
+  v1.use(requireAuth);
+
   // ── M-01: Email Sending via Nodemailer ──
   v1.post('/invoices/:id/send-email', requireAuth, async (req, res): Promise<void> => {
     try {

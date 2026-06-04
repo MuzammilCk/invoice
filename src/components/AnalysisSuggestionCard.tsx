@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, AlertTriangle, Info, ShieldAlert, ArrowRight, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
+import { apiClient } from '../lib/apiClient';
 
 interface Suggestion {
   type: string;
@@ -32,7 +33,7 @@ export function AnalysisSuggestionCard({ invoice }: AnalysisSuggestionCardProps)
   const analyzeInvoice = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/v1/invoices/${invoice.id}/suggestions`, {
+      const res = await apiClient(`/api/v1/invoices/${invoice.id}/suggestions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice }),

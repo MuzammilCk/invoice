@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { z } from 'zod';
 import { TranscriptReviewPanel } from '../components/TranscriptReviewPanel';
 import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
+import { apiClient } from '../lib/apiClient';
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -119,7 +120,7 @@ export function Dashboard() {
       formData.append('receipt', file);
 
       // 1. Extract text via OCR
-      const ocrRes = await fetch('/api/v1/ocr-receipt', { method: 'POST', body: formData });
+      const ocrRes = await apiClient('/api/v1/ocr-receipt', { method: 'POST', body: formData });
       if (!ocrRes.ok) throw new Error('OCR scanning failed');
       const { text } = await ocrRes.json();
 
@@ -129,7 +130,7 @@ export function Dashboard() {
 
       // 2. Pass extracted text to standard generation stream
       setStreamingStage('generating');
-      const res = await fetch('/api/v1/generate-invoice-stream', {
+      const res = await apiClient('/api/v1/generate-invoice-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: `Extract an invoice from the following OCR text:\n\n${text}` }),
@@ -187,7 +188,7 @@ export function Dashboard() {
       if (aiMode === 'text' && prompt) {
         // B-01: Use SSE streaming endpoint for real-time feedback
         setStreamingStage('generating');
-        const res = await fetch('/api/v1/generate-invoice-stream', {
+        const res = await apiClient('/api/v1/generate-invoice-stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt }),
@@ -227,7 +228,7 @@ export function Dashboard() {
         setVoiceStage('transcribing');
         const formData = new FormData();
         formData.append('audio', audioBlob, 'voice.webm');
-        const res = await fetch('/api/v1/transcribe-audio', { method: 'POST', body: formData });
+        const res = await apiClient('/api/v1/transcribe-audio', { method: 'POST', body: formData });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({ error: 'Transcription failed' }));
           throw new Error(errData.error || 'Transcription failed');
@@ -264,7 +265,7 @@ export function Dashboard() {
     setError('');
 
     try {
-      const res = await fetch('/api/v1/text-to-invoice-from-transcript', {
+      const res = await apiClient('/api/v1/text-to-invoice-from-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transcript }),

@@ -12,6 +12,7 @@ import { RecurringBillingModal } from '../components/RecurringBillingModal';
 import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown, Mail, Shield, CalendarClock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
+import { apiClient } from '../lib/apiClient';
 
 // Issue 6.2: CSS moved to external file — no more dangerouslySetInnerHTML
 import '../styles/invoice-export.css';
@@ -90,7 +91,7 @@ export function Editor() {
 
     try {
       // ── Step 1: Validate invoice before export ──
-      const validationRes = await fetch(`/api/v1/invoices/${invoice.id}/validate`, {
+      const validationRes = await apiClient(`/api/v1/invoices/${invoice.id}/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice }),
@@ -111,7 +112,7 @@ export function Editor() {
       // ── Step 2: Request server-side PDF ──
       setPdfProgress('Generating PDF...');
 
-      const response = await fetch(`/api/v1/invoices/${invoice.id}/pdf`, {
+      const response = await apiClient(`/api/v1/invoices/${invoice.id}/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invoice }),

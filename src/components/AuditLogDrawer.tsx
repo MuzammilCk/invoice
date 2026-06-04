@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Clock, Shield, FileText, User, Eye, Pencil, Trash, Share, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDate } from '../lib/utils';
+import { apiClient } from '../lib/apiClient';
 
 interface AuditEntry {
   id: string;
@@ -53,7 +54,7 @@ export function AuditLogDrawer({ invoiceId, isOpen, onClose }: AuditLogDrawerPro
     setIsLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/v1/invoices/${invoiceId}/audit-log`);
+      const res = await apiClient(`/api/v1/invoices/${invoiceId}/audit-log`);
       if (!res.ok) throw new Error('Failed to load audit log');
       const data = await res.json();
       setEntries(data.entries || []);
