@@ -5,7 +5,7 @@ import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 
 export function SidebarNav() {
-  const { businessInfo } = useStore();
+  const { businessInfo, authUser } = useStore();
 
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -14,8 +14,9 @@ export function SidebarNav() {
     { to: '/settings', icon: Settings, label: 'Settings' },
   ];
 
-  // Issue 6.5: Generate deterministic initials from business name — no external CDN call
-  const initials = businessInfo.name
+  // Use auth user name if available, fallback to business name
+  const displayName = authUser?.name || businessInfo.name;
+  const initials = displayName
     ?.split(' ')
     .map(w => w[0])
     .slice(0, 2)
@@ -48,8 +49,7 @@ export function SidebarNav() {
         <button className="p-3 text-zinc-500 hover:text-indigo-400 transition-colors">
           <Bot className="w-6 h-6 stroke-[1.5]" />
         </button>
-        {/* Issue 6.5: Initials-based avatar — no external CDN request, works offline */}
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-indigo-500/50">
+        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-indigo-500/50" title={displayName}>
           {initials}
         </div>
       </div>

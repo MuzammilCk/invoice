@@ -5,7 +5,11 @@ import { EditableInvoice } from '../components/EditableInvoice';
 import { SyncIndicator } from '../components/SyncIndicator';
 import { useStore } from '../store/useStore';
 import { TEMPLATES } from '../lib/templates';
-import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown } from 'lucide-react';
+import { EmailCompositionModal } from '../components/EmailCompositionModal';
+import { AuditLogDrawer } from '../components/AuditLogDrawer';
+import { AnalysisSuggestionCard } from '../components/AnalysisSuggestionCard';
+import { RecurringBillingModal } from '../components/RecurringBillingModal';
+import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown, Mail, Shield, CalendarClock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
 
@@ -61,6 +65,9 @@ export function Editor() {
   const invoice = invoices.find(inv => inv.id === id);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<string>('');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
 
   if (!invoice) {
     return <div className="flex h-screen items-center justify-center text-zinc-400">Invoice not found.</div>;
@@ -171,6 +178,27 @@ export function Editor() {
               </button>
             </div>
             <button
+              onClick={() => setIsAuditLogOpen(true)}
+              className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+              title="Audit Log"
+            >
+              <Shield className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsRecurringModalOpen(true)}
+              className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+              title="Recurring Billing"
+            >
+              <CalendarClock className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setIsEmailModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              Email
+            </button>
+            <button
               onClick={handlePrint}
               disabled={isGeneratingPDF}
               className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -213,8 +241,9 @@ export function Editor() {
         </div>
         
         <footer className="h-10 px-6 flex flex-shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-900 text-[10px] text-zinc-500">
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1.5 font-medium text-zinc-400"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div> Saved</span>
+          <div className="flex gap-4 items-center">
+            {/* B-13 FIX: Dynamic sync status instead of static "Saved" */}
+            <SyncIndicator />
             <span className="text-zinc-500 hidden sm:inline">Invoice: {invoice.invoiceNumber}</span>
           </div>
         </footer>
@@ -229,6 +258,8 @@ export function Editor() {
          </div>
          
          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar relative">
+           <AnalysisSuggestionCard invoice={invoice} />
+           
            <div className="space-y-3 relative z-40">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Design Family</span>
              <Dropdown 
@@ -354,6 +385,22 @@ export function Editor() {
            </div>
          </div>
       </div>
+
+      <EmailCompositionModal 
+        invoice={invoice} 
+        isOpen={isEmailModalOpen} 
+        onClose={() => setIsEmailModalOpen(false)} 
+      />
+      <AuditLogDrawer 
+        invoiceId={invoice.id} 
+        isOpen={isAuditLogOpen} 
+        onClose={() => setIsAuditLogOpen(false)} 
+      />
+      <RecurringBillingModal
+        invoice={invoice}
+        isOpen={isRecurringModalOpen}
+        onClose={() => setIsRecurringModalOpen(false)}
+      />
     </div>
   );
 }

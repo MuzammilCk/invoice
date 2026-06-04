@@ -12,7 +12,7 @@ const STEPS = [
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const { updateBusinessInfo } = useStore();
+  const { updateBusinessInfo, setOnboardingComplete } = useStore();
   const [step, setStep] = useState(0);
   const [businessName, setBusinessName] = useState('');
   const [businessAddress, setBusinessAddress] = useState('');
@@ -26,7 +26,8 @@ export function OnboardingPage() {
       address: businessAddress,
       taxId,
     });
-    localStorage.setItem('onboarding_complete', 'true');
+    // B-12 FIX: Use Zustand instead of localStorage
+    setOnboardingComplete(true);
     navigate('/');
   };
 

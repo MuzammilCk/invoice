@@ -5,6 +5,13 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const MAX_HISTORY_DEPTH = 50;
 
+// ── B-12 + Auth: Onboarding and auth state ──
+interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
 interface StoreState {
   invoices: Invoice[];
   businessInfo: Invoice['businessInfo'];
@@ -14,6 +21,18 @@ interface StoreState {
   syncStatus: 'idle' | 'syncing' | 'synced' | 'error' | 'offline';
   lastSyncedAt: string | null;
   syncError: string | null;
+
+  // B-12: Onboarding state (replaces localStorage)
+  onboardingComplete: boolean;
+  setOnboardingComplete: (complete: boolean) => void;
+
+  // Auth state (B-03/B-04/B-05)
+  authUser: AuthUser | null;
+  isAuthenticated: boolean;
+  accessToken: string | null;
+  refreshToken: string | null;
+  setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void;
+  clearAuth: () => void;
 
   addInvoice: (invoice: Invoice) => void;
   updateInvoice: (id: string, updates: Partial<Invoice>) => void;
@@ -55,6 +74,29 @@ export const useStore = create<StoreState>()(
       syncStatus: 'idle',
       lastSyncedAt: null,
       syncError: null,
+
+      // B-12: Onboarding state
+      onboardingComplete: false,
+      setOnboardingComplete: (complete) => set({ onboardingComplete: complete }),
+
+      // Auth state
+      authUser: null,
+      isAuthenticated: false,
+      accessToken: null,
+      refreshToken: null,
+      setAuth: (user, accessToken, refreshToken) => set({
+        authUser: user,
+        isAuthenticated: true,
+        accessToken,
+        refreshToken,
+      }),
+      clearAuth: () => set({
+        authUser: null,
+        isAuthenticated: false,
+        accessToken: null,
+        refreshToken: null,
+        invoices: [],
+      }),
 
       setSyncStatus: (status) => set({ syncStatus: status }),
 
@@ -161,7 +203,7 @@ export const useStore = create<StoreState>()(
               .from('invoices')
               .upsert({
                 id: invoice.id,
-                user_id: 'local', // Assuming simple unauth local dev for now, or auth.uid() later
+                user_id: state.authUser?.id || 'local', // B-05 FIX: Use real user ID from auth state
                 invoice_number: invoice.invoiceNumber,
                 title: invoice.title || 'Invoice',
                 status: invoice.status || 'draft',
@@ -294,7 +336,15 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: `invoice-studio-storage-${(import.meta as any).env?.MODE ?? 'production'}`,
-      partialize: (state) => ({ invoices: state.invoices, businessInfo: state.businessInfo }), // Don't persist history!
+      partialize: (state) => ({
+        invoices: state.invoices,
+        businessInfo: state.businessInfo,
+        onboardingComplete: state.onboardingComplete,
+        authUser: state.authUser,
+        isAuthenticated: state.isAuthenticated,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+      }), // Persist auth + onboarding, but not history or sync transient state
     }
   )
 );

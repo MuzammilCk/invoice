@@ -16,6 +16,7 @@ import puppeteer, { Browser } from 'puppeteer';
 import cron from 'node-cron';
 import { createClient } from '@supabase/supabase-js';
 import { buildClientContext, formatClientContextForPrompt } from './src/lib/ai-context';
+import { computeInvoiceTotals } from './src/lib/calculations';
 
 dotenv.config();
 
@@ -340,18 +341,12 @@ function buildPrintHTML(invoice: any): string {
   const themeColor = invoice.themeColor || '#4f46e5';
   const settings = invoice.displaySettings || {};
 
-  // Compute totals server-side (duplicated from calculations.ts for server context)
-  const subtotal = (invoice.items || []).reduce(
-    (sum: number, item: any) => sum + (item.quantity || 0) * (item.rate || 0),
-    0
-  );
-  const discountRate = settings.showDiscount !== false ? (invoice.discountRate || 0) : 0;
-  const discountAmount = Math.min(subtotal * (discountRate / 100), subtotal);
-  const taxableAmount = subtotal - discountAmount;
-  const taxRate = settings.showTax !== false ? (invoice.taxRate || 0) : 0;
-  const taxAmount = taxableAmount * (taxRate / 100);
-  const shippingAmount = settings.showShipping !== false ? (invoice.shipping || 0) : 0;
-  const grandTotal = Math.max(0, subtotal - discountAmount + taxAmount + shippingAmount);
+  // B-02 FIX: Use Decimal.js-based computeInvoiceTotals — single source of truth
+  // Previously used native float arithmetic which caused currency rounding errors
+  const totals = computeInvoiceTotals(invoice);
+  const { subtotal, discountAmount, taxAmount, shippingAmount, grandTotal } = totals;
+  const discountRate = invoice.displaySettings?.showDiscount !== false ? (invoice.discountRate || 0) : 0;
+  const taxRate = invoice.displaySettings?.showTax !== false ? (invoice.taxRate || 0) : 0;
 
   const formatMoney = (amount: number) => {
     try {
@@ -1035,6 +1030,195 @@ EXPANDED FIELD RULES:
       },
     });
   });
+  // ── M-01: Email Sending via Nodemailer ──
+  v1.post('/invoices/:id/send-email', requireAuth, async (req, res): Promise<void> => {
+    try {
+      const { to, subject, body, attachPdf = true, invoice } = req.body;
+
+      if (!to || !subject) {
+        res.status(400).json({ error: 'Recipient (to) and subject are required.' });
+        return;
+      }
+
+      // Generate PDF if requested
+      let pdfBuffer: Buffer | null = null;
+      if (attachPdf && invoice) {
+        try {
+          const html = buildPrintHTML(invoice);
+          const browser = await getBrowser();
+          const page = await browser.newPage();
+          await page.setContent(html, { waitUntil: 'load', timeout: PDF_TIMEOUT_MS });
+          pdfBuffer = Buffer.from(await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: { top: '0', right: '0', bottom: '0', left: '0' },
+          }));
+          await page.close();
+        } catch (pdfErr) {
+          console.warn('[email] PDF generation failed, sending without attachment:', pdfErr);
+        }
+      }
+
+      // Check if Nodemailer SMTP is configured
+      const smtpHost = process.env.SMTP_HOST;
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      const fromEmail = process.env.SMTP_FROM || smtpUser || 'noreply@invoicestudio.local';
+
+      if (smtpHost && smtpUser && smtpPass) {
+        // Production: send via SMTP
+        const nodemailer = await import('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: { user: smtpUser, pass: smtpPass },
+        });
+
+        const mailOptions: any = {
+          from: fromEmail,
+          to,
+          subject,
+          html: body || `<p>Please find the attached invoice.</p>`,
+        };
+
+        if (pdfBuffer) {
+          mailOptions.attachments = [{
+            filename: `${invoice?.invoiceNumber || 'invoice'}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          }];
+        }
+
+        await transporter.sendMail(mailOptions);
+        res.json({ sent: true, to, method: 'smtp' });
+      } else {
+        // Dev mode: log email details
+        console.log(`\n📧 [dev-email] To: ${to}`);
+        console.log(`📧 [dev-email] Subject: ${subject}`);
+        console.log(`📧 [dev-email] Body: ${(body || '').substring(0, 200)}...`);
+        console.log(`📧 [dev-email] PDF attached: ${!!pdfBuffer} (${pdfBuffer ? pdfBuffer.length : 0} bytes)\n`);
+
+        res.json({
+          sent: true,
+          to,
+          method: 'dev-console',
+          message: 'Email logged to console (SMTP not configured). Set SMTP_HOST, SMTP_USER, SMTP_PASS env vars for real delivery.',
+        });
+      }
+    } catch (error) {
+      handleApiError(error, res, 'send-email');
+    }
+  });
+
+  // ── M-03: Proactive Invoice Suggestions ──
+  v1.post('/invoices/:id/suggestions', requireAuth, async (req, res): Promise<void> => {
+    try {
+      const { invoice } = req.body;
+      if (!invoice) {
+        res.status(400).json({ error: 'Invoice data is required.' });
+        return;
+      }
+
+      const suggestions: { type: string; title: string; message: string; priority: 'high' | 'medium' | 'low' }[] = [];
+
+      // Analyze and generate proactive suggestions
+      const totals = computeInvoiceTotals(invoice);
+
+      // Payment terms
+      if (!invoice.notes?.toLowerCase().includes('payment') && !invoice.notes?.toLowerCase().includes('bank')) {
+        suggestions.push({
+          type: 'payment_terms',
+          title: 'Add Payment Instructions',
+          message: 'Include bank details or payment link in notes to speed up collection.',
+          priority: 'high',
+        });
+      }
+
+      // Tax compliance
+      if ((!invoice.taxRate || invoice.taxRate === 0) && totals.grandTotal > 500) {
+        suggestions.push({
+          type: 'tax_check',
+          title: 'Verify Tax Exemption',
+          message: 'No tax applied on a high-value invoice. Confirm this is intentional for compliance.',
+          priority: 'medium',
+        });
+      }
+
+      // Discount optimization
+      if (invoice.discountRate && invoice.discountRate > 20) {
+        const formattedDiscount = new Intl.NumberFormat('en-US', { style: 'currency', currency: invoice.currency || 'USD' }).format(totals.discountAmount);
+        suggestions.push({
+          type: 'discount_alert',
+          title: 'Large Discount Applied',
+          message: `A ${invoice.discountRate}% discount reduces revenue by ${formattedDiscount}. Consider tiered discounts instead.`,
+          priority: 'medium',
+        });
+      }
+
+      // Missing client info
+      if (!invoice.customerInfo?.email) {
+        suggestions.push({
+          type: 'missing_email',
+          title: 'Add Client Email',
+          message: 'An email address is needed to send this invoice digitally.',
+          priority: 'high',
+        });
+      }
+
+      // Due date check
+      if (invoice.dueDate) {
+        const daysUntilDue = Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86400000);
+        if (daysUntilDue < 0 && invoice.status !== 'paid') {
+          suggestions.push({
+            type: 'overdue',
+            title: 'Invoice is Overdue',
+            message: `This invoice is ${Math.abs(daysUntilDue)} days past due. Consider sending a payment reminder.`,
+            priority: 'high',
+          });
+        } else if (daysUntilDue <= 3 && daysUntilDue >= 0 && invoice.status !== 'paid') {
+          suggestions.push({
+            type: 'due_soon',
+            title: 'Payment Due Soon',
+            message: `Due in ${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''}. Send a friendly reminder to ensure on-time payment.`,
+            priority: 'medium',
+          });
+        }
+      }
+
+      // High-value invoice
+      if (totals.grandTotal > 10000) {
+        suggestions.push({
+          type: 'high_value',
+          title: 'High-Value Invoice',
+          message: 'Consider requesting a deposit or milestone payment for invoices over $10,000.',
+          priority: 'low',
+        });
+      }
+
+      // Item description quality
+      const shortDescriptions = (invoice.items || []).filter((i: any) => (i.description || '').length < 10);
+      if (shortDescriptions.length > 0) {
+        suggestions.push({
+          type: 'description_quality',
+          title: 'Improve Item Descriptions',
+          message: `${shortDescriptions.length} item${shortDescriptions.length > 1 ? 's have' : ' has'} very short descriptions. Detailed descriptions reduce payment disputes.`,
+          priority: 'low',
+        });
+      }
+
+      res.json({
+        suggestions: suggestions.sort((a, b) => {
+          const p = { high: 0, medium: 1, low: 2 };
+          return p[a.priority] - p[b.priority];
+        }),
+        analyzedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      handleApiError(error, res, 'suggestions');
+    }
+  });
 
   // ── Recurring Schedules ──
   const activeSchedules = new Map<string, any>();
@@ -1330,6 +1514,145 @@ RULES:
       }
     } catch (error) {
       handleApiError(error, res, 'analyze');
+    }
+  });
+
+  // ── B-06: Route: Transcribe Audio Only (Stage 1 of split voice pipeline) ──
+  v1.post('/transcribe-audio', requireAuth, aiRateLimiter, upload.single('audio'), async (req, res): Promise<void> => {
+    try {
+      const audioFile = req.file;
+      if (!audioFile) {
+        res.status(400).json({ error: 'Audio file is required' });
+        return;
+      }
+
+      const sttResponse = await withRetry(async () => {
+        const r = await fetch(`${STT_URL}/transcribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio_b64: audioFile.buffer.toString('base64'),
+            mime_type: audioFile.mimetype || 'audio/webm',
+            language: req.body.language ?? null,
+          }),
+        });
+        if (!r.ok) throw new Error(`STT sidecar returned ${r.status}`);
+        return r.json();
+      });
+
+      const transcript: string = sttResponse.text || '';
+      const language: string = sttResponse.language ?? 'en';
+      const confidence: number = sttResponse.confidence ?? 0;
+
+      console.log(`[transcribe] Transcribed (${language}, ${confidence}%): ${transcript.substring(0, 100)}...`);
+
+      if (!transcript.trim()) {
+        res.status(400).json({ error: 'Could not transcribe any speech from the audio.' });
+        return;
+      }
+
+      res.json({ transcript, language, confidence });
+    } catch (error) {
+      handleApiError(error, res, 'transcribe-audio');
+    }
+  });
+
+  // ── M-02: Route: Extract Text from Receipt via OCR (Tesseract.js) ──
+  v1.post('/ocr-receipt', requireAuth, aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: 'No receipt image uploaded.' });
+        return;
+      }
+
+      console.log(`[ocr] Processing uploaded receipt: ${req.file.originalname} (${req.file.size} bytes)`);
+      const tesseract = await import('tesseract.js');
+      
+      const { data: { text } } = await tesseract.recognize(
+        req.file.buffer,
+        'eng',
+        { logger: m => console.log(`[ocr progress] ${m.status}: ${Math.round(m.progress * 100)}%`) }
+      );
+
+      console.log(`[ocr] Extracted text length: ${text.length}`);
+      res.json({ text: text.trim() });
+    } catch (error) {
+      handleApiError(error, res, 'ocr-receipt');
+    }
+  });
+
+  // ── B-06: Route: Text-to-Invoice from Reviewed Transcript (Stage 2, SSE) ──
+  v1.post('/text-to-invoice-from-transcript', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+    try {
+      const { transcript, invoiceContext } = req.body;
+      if (!transcript || typeof transcript !== 'string') {
+        res.status(400).json({ error: 'Transcript is required and must be a string' });
+        return;
+      }
+
+      const sanitizedTranscript = stripPIIFromPrompt(sanitizePrompt(transcript));
+      const contextStr = invoiceContext ? `Current invoice context: ${JSON.stringify(invoiceContext)}. ` : '';
+      const finalPrompt = `${contextStr}User dictation (reviewed and confirmed): ${sanitizedTranscript}. Return invoice data as JSON.`;
+
+      // SSE setup
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders();
+
+      const sendEvent = (event: string, data: any) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      sendEvent('status', { stage: 'generating', message: 'AI is generating invoice from transcript...' });
+
+      const stream = await ollama.chat.completions.create({
+        model: OLLAMA_MODEL,
+        messages: [
+          { role: 'system', content: invoiceSystemInstruction },
+          { role: 'user', content: finalPrompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'invoice', schema: invoiceSchema },
+        } as any,
+        temperature: 0.1,
+        stream: true,
+      });
+
+      let fullContent = '';
+      let chunkCount = 0;
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content ?? '';
+        if (delta) {
+          fullContent += delta;
+          chunkCount++;
+          if (chunkCount % 3 === 0) {
+            sendEvent('chunk', { partial: fullContent, chunkCount });
+          }
+        }
+      }
+
+      sendEvent('status', { stage: 'parsing', message: 'Parsing response...' });
+
+      try {
+        const generatedData = JSON.parse(fullContent);
+        sendEvent('result', generatedData);
+      } catch {
+        sendEvent('error', { error: 'AI returned unparseable JSON. Please try again.' });
+      }
+
+      sendEvent('done', { totalChunks: chunkCount });
+      res.end();
+    } catch (error: any) {
+      if (res.headersSent) {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: 'Generation failed. Please try again.' })}\n\n`);
+        res.end();
+      } else {
+        handleApiError(error, res, 'text-to-invoice-from-transcript');
+      }
     }
   });
 
@@ -1668,13 +1991,14 @@ RULES:
   v1.post('/invoices/:id/share', requireAuth, async (req, res): Promise<void> => {
     try {
       const invoiceId = req.params.id;
-      const { accessLevel = 'view', expiresInDays = 30 } = req.body;
+      const { accessLevel = 'view', expiresInDays = 30, invoice = null } = req.body;
 
       const token = randomUUID().replace(/-/g, '').slice(0, 16);
 
       // Store in Supabase (or in-memory for local dev)
       const shareData = {
         invoiceId,
+        invoice, // B-08: Store invoice snapshot for public viewing/PDF
         token,
         accessLevel,
         expiresAt: new Date(Date.now() + expiresInDays * 86400000).toISOString(),
@@ -1731,6 +2055,198 @@ RULES:
     }
   });
 
+  // ── B-08: Route: Record Shared Invoice View ──
+  v1.post('/shared/:token/view', async (req, res): Promise<void> => {
+    try {
+      const { token } = req.params;
+      const shareData = shareTokenStore.get(token);
+      if (shareData && shareData.isActive) {
+        shareData.viewCount = (shareData.viewCount || 0) + 1;
+        shareData.lastViewedAt = new Date().toISOString();
+      }
+      res.json({ success: true });
+    } catch (error) {
+      handleApiError(error, res, 'shared-view-track');
+    }
+  });
+
+  // ── M-08: Route: Simulate Payment / Mark Paid ──
+  v1.post('/shared/:token/pay', async (req, res): Promise<void> => {
+    try {
+      const { token } = req.params;
+      const shareData = shareTokenStore.get(token);
+      if (!shareData || !shareData.isActive) {
+        res.status(404).json({ error: 'Share link not found.' });
+        return;
+      }
+      
+      // Update the embedded snapshot
+      shareData.invoice.status = 'paid';
+      
+      // Attempt to update the original invoice in Supabase if exists
+      if (supabase) {
+        await supabase
+          .from('invoices')
+          .update({ status: 'paid', updated_at: new Date().toISOString() })
+          .eq('id', shareData.invoice.id);
+      }
+      
+      res.json({ success: true, status: 'paid' });
+    } catch (error) {
+      handleApiError(error, res, 'shared-pay');
+    }
+  });
+
+  // ── B-08: Route: Download Shared Invoice as PDF (public, token-based) ──
+  v1.get('/shared/:token/pdf', async (req, res): Promise<void> => {
+    let page = null;
+    try {
+      const { token } = req.params;
+      const shareData = shareTokenStore.get(token);
+
+      if (!shareData || !shareData.isActive || new Date(shareData.expiresAt) < new Date()) {
+        res.status(404).json({ error: 'Share link not found, revoked, or expired.' });
+        return;
+      }
+
+      const invoice = shareData.invoice;
+      if (!invoice) {
+        res.status(404).json({ error: 'Invoice data not found.' });
+        return;
+      }
+
+      // Use same PDF generation logic as authenticated endpoint
+      const html = buildPrintHTML(invoice);
+      const browser = await getBrowser();
+      page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'load', timeout: PDF_TIMEOUT_MS });
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '0', right: '0', bottom: '0', left: '0' },
+        preferCSSPageSize: true,
+        timeout: PDF_TIMEOUT_MS,
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${invoice.title || 'Invoice'}.pdf"`);
+      res.send(Buffer.from(pdfBuffer));
+    } catch (error) {
+      handleApiError(error, res, 'shared-pdf');
+    } finally {
+      if (page) {
+        try { await page.close(); } catch {}
+      }
+    }
+  });
+
+  // ── B-08 / M-08: Route: Mark Shared Invoice as Paid (Razorpay stub) ──
+  v1.post('/shared/:token/mark-paid', async (req, res): Promise<void> => {
+    try {
+      const { token } = req.params;
+      const shareData = shareTokenStore.get(token);
+
+      if (!shareData || !shareData.isActive) {
+        res.status(404).json({ error: 'Share link not found or revoked.' });
+        return;
+      }
+
+      // Razorpay integration stub — in production, verify payment with Razorpay API
+      shareData.markedPaidAt = new Date().toISOString();
+      shareData.paymentStatus = 'paid';
+
+      res.json({
+        success: true,
+        message: 'Invoice marked as paid. Razorpay integration coming soon.',
+        markedPaidAt: shareData.markedPaidAt,
+      });
+    } catch (error) {
+      handleApiError(error, res, 'shared-mark-paid');
+    }
+  });
+
+  // ── B-07: Route: Server-Side Invoice Validation ──
+  v1.post('/invoices/:id/validate', requireAuth, async (req, res): Promise<void> => {
+    try {
+      const { invoice } = req.body;
+      if (!invoice) {
+        res.status(400).json({ error: 'Invoice data is required' });
+        return;
+      }
+
+      const issues: { code: string; field: string; message: string; severity: 'error' | 'warning' }[] = [];
+
+      // ── Customer Info Checks ──
+      if (!invoice.customerInfo?.name?.trim()) {
+        issues.push({ code: 'C001', field: 'customerInfo.name', message: 'Client name is required.', severity: 'error' });
+      }
+      if (!invoice.customerInfo?.email?.trim()) {
+        issues.push({ code: 'C002', field: 'customerInfo.email', message: 'Client email is missing. Required for delivery.', severity: 'error' });
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoice.customerInfo.email)) {
+        issues.push({ code: 'C003', field: 'customerInfo.email', message: 'Client email format is invalid.', severity: 'error' });
+      }
+      if (!invoice.customerInfo?.address?.trim()) {
+        issues.push({ code: 'C004', field: 'customerInfo.address', message: 'Client address is recommended for compliance.', severity: 'warning' });
+      }
+
+      // ── Line Item Checks ──
+      if (!invoice.items || invoice.items.length === 0) {
+        issues.push({ code: 'I001', field: 'items', message: 'At least one line item is required.', severity: 'error' });
+      } else {
+        invoice.items.forEach((item: any, idx: number) => {
+          if (!item.description?.trim()) {
+            issues.push({ code: `I002`, field: `items[${idx}].description`, message: `Item ${idx + 1}: Description is empty.`, severity: 'error' });
+          }
+          if (typeof item.quantity !== 'number' || item.quantity <= 0) {
+            issues.push({ code: `I003`, field: `items[${idx}].quantity`, message: `Item ${idx + 1}: Quantity must be > 0.`, severity: 'error' });
+          }
+          if (typeof item.rate !== 'number' || item.rate < 0) {
+            issues.push({ code: `I004`, field: `items[${idx}].rate`, message: `Item ${idx + 1}: Rate must be >= 0.`, severity: 'error' });
+          }
+        });
+      }
+
+      // ── Business Info Checks ──
+      if (!invoice.businessInfo?.name?.trim()) {
+        issues.push({ code: 'B001', field: 'businessInfo.name', message: 'Business name is required.', severity: 'error' });
+      }
+      if (!invoice.businessInfo?.taxId?.trim()) {
+        issues.push({ code: 'B002', field: 'businessInfo.taxId', message: 'Tax ID / GST number is recommended for tax compliance.', severity: 'warning' });
+      }
+
+      // ── Date Checks ──
+      if (invoice.dueDate && invoice.issueDate) {
+        if (new Date(invoice.dueDate) < new Date(invoice.issueDate)) {
+          issues.push({ code: 'D001', field: 'dueDate', message: 'Due date is before issue date.', severity: 'error' });
+        }
+      }
+      if (invoice.dueDate && new Date(invoice.dueDate) < new Date()) {
+        issues.push({ code: 'D002', field: 'dueDate', message: 'Due date is in the past.', severity: 'warning' });
+      }
+
+      // ── Financial Checks ──
+      if (typeof invoice.taxRate === 'number' && invoice.taxRate > 50) {
+        issues.push({ code: 'F001', field: 'taxRate', message: 'Tax rate exceeds 50%. Verify this is correct.', severity: 'warning' });
+      }
+      if (typeof invoice.discountRate === 'number' && invoice.discountRate > 100) {
+        issues.push({ code: 'F002', field: 'discountRate', message: 'Discount exceeds 100%. This results in a credit.', severity: 'warning' });
+      }
+
+      const errorCount = issues.filter(i => i.severity === 'error').length;
+      const warningCount = issues.filter(i => i.severity === 'warning').length;
+
+      res.json({
+        valid: errorCount === 0,
+        issues,
+        errorCount,
+        warningCount,
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      handleApiError(error, res, 'validate');
+    }
+  });
+
   // ── Route: Get Audit Logs for Invoice ──
   v1.get('/invoices/:id/audit-log', requireAuth, async (req, res): Promise<void> => {
     try {
@@ -1750,6 +2266,27 @@ RULES:
   });
 
   // Mount versioned API routes
+  // ── B-16: Multi-currency FX conversion (Rates Endpoint) ──
+  let cachedRates: any = null;
+  let lastRatesFetch = 0;
+  v1.get('/rates', async (req, res): Promise<void> => {
+    try {
+      const now = Date.now();
+      if (cachedRates && now - lastRatesFetch < 1000 * 60 * 60 * 12) { // 12 hours cache
+        res.json(cachedRates);
+        return;
+      }
+      const fetchRes = await fetch('https://open.er-api.com/v6/latest/USD');
+      if (!fetchRes.ok) throw new Error('Failed to fetch exchange rates');
+      const data = await fetchRes.json();
+      cachedRates = data.rates;
+      lastRatesFetch = now;
+      res.json(cachedRates);
+    } catch (error) {
+      handleApiError(error, res, 'fx-rates');
+    }
+  });
+
   app.use('/api/v1', v1);
 
   // ── Backward compatibility: redirect old routes to v1 ──
