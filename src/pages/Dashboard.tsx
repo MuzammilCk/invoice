@@ -383,12 +383,12 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="flex-1 p-8 lg:p-12 overflow-y-auto bg-zinc-950">
+    <div className="flex-1 p-8 lg:p-12 overflow-y-auto bg-transparent relative">
       <div className="max-w-7xl mx-auto">
         <header className="mb-12 flex justify-between items-end">
           <div>
-            <h1 className="text-4xl font-light tracking-tight mb-2 text-zinc-100">Workspace</h1>
-            <p className="text-zinc-500">Design, automate, and dispatch enterprise billing.</p>
+            <h1 className="text-5xl font-serif italic mb-2 gold-gradient-text tracking-wide">Workspace</h1>
+            <p className="text-[#a09e91] font-serif text-lg italic">Design, automate, and dispatch enterprise billing.</p>
           </div>
         </header>
 
@@ -403,14 +403,14 @@ export function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.08 }}
                 onClick={mode.onClick}
-                className={`flex items-center gap-3 p-5 rounded-2xl transition-all ${mode.color} group`}
+                className={`flex items-center gap-4 p-5 transition-all sketched-border bg-[#15171c]/50 border-[#bf953f]/20 hover:border-[#bf953f]/50 hover:shadow-[0_0_15px_rgba(191,149,63,0.1)] group`}
               >
-                <div className="w-10 h-10 bg-black/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#bf953f]/20 to-[#aa771c]/5 rounded-xl border border-[#bf953f]/30 flex items-center justify-center group-hover:scale-110 transition-transform flex-shrink-0 text-[#bf953f]">
                   <mode.icon className="w-5 h-5" />
                 </div>
                 <div className="text-left">
-                  <h3 className="font-semibold text-sm">{mode.title}</h3>
-                  <p className="text-[10px] opacity-60 mt-0.5">{mode.desc}</p>
+                  <h3 className="font-serif italic font-bold text-[#fcf6ba] text-sm">{mode.title}</h3>
+                  <p className="text-[11px] font-serif italic text-[#a09e91] mt-0.5">{mode.desc}</p>
                 </div>
               </motion.button>
             ))}
@@ -421,20 +421,20 @@ export function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
           {/* Projects Pipeline */}
           <section className="xl:col-span-2">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
-              <FileText className="w-4 h-4" /> Active Documents
+            <h2 className="text-xs font-serif font-bold uppercase tracking-widest text-[#a09e91] mb-6 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#bf953f]" /> Active Documents
             </h2>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               {/* Search */}
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#bf953f]" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search invoices..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-zinc-600"
+                  className="w-full bg-[#15171c]/50 sketched-border pl-10 pr-4 py-2.5 text-sm text-[#fcf6ba] focus:outline-none focus:ring-1 focus:ring-[#bf953f] placeholder-[#bf953f]/50 transition-all font-serif italic"
                 />
               </div>
 
@@ -442,7 +442,7 @@ export function Dashboard() {
               <select
                 value={statusFilter}
                 onChange={e => setStatusFilter(e.target.value)}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="bg-[#15171c]/50 sketched-border px-4 py-2.5 text-sm text-[#fcf6ba] focus:outline-none focus:ring-1 focus:ring-[#bf953f] font-serif italic"
               >
                 <option value="all">All Status</option>
                 <option value="draft">Draft</option>
@@ -459,7 +459,7 @@ export function Dashboard() {
                   setSortBy(by as any);
                   setSortOrder(order as any);
                 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="bg-[#15171c]/50 sketched-border px-4 py-2.5 text-sm text-[#fcf6ba] focus:outline-none focus:ring-1 focus:ring-[#bf953f] font-serif italic"
               >
                 <option value="date-desc">Newest First</option>
                 <option value="date-asc">Oldest First</option>
@@ -471,10 +471,10 @@ export function Dashboard() {
             </div>
             
             {filteredInvoices.length === 0 ? (
-              <div className="text-center py-20 bg-zinc-900/40 rounded-3xl border border-zinc-800/50 border-dashed">
-                <FileText className="w-16 h-16 text-zinc-800 mx-auto mb-4" />
-                <p className="text-zinc-300 font-medium text-lg">No documents found</p>
-                <p className="text-zinc-500 text-sm mt-2">Adjust your filters or start a new document above</p>
+              <div className="text-center py-20 bg-[#15171c]/40 sketched-border border-[#bf953f]/30 border-dashed">
+                <FileText className="w-16 h-16 text-[#bf953f]/20 mx-auto mb-4" />
+                <p className="text-[#fcf6ba] font-serif italic font-bold text-lg">No documents found</p>
+                <p className="text-[#a09e91] font-serif italic text-sm mt-2">Adjust your filters or start a new document above</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -482,25 +482,25 @@ export function Dashboard() {
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                     key={invoice.id} onClick={() => navigate(`/editor/${invoice.id}`)} 
-                    className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-700 hover:shadow-xl hover:shadow-black/50 cursor-pointer transition-all group"
+                    className="bg-[#15171c]/50 sketched-border border-[#bf953f]/30 p-6 hover:border-[#bf953f] hover:shadow-[0_0_15px_rgba(191,149,63,0.1)] cursor-pointer transition-all group"
                   >
                      <div className="flex justify-between items-start mb-6">
                        <div>
-                         <span className="bg-zinc-800 text-zinc-300 text-[10px] font-bold px-2 py-1 rounded inline-block uppercase tracking-wider mb-3">{invoice.status}</span>
-                         <h3 className="font-medium text-lg text-zinc-100 group-hover:text-indigo-400 transition-colors">{invoice.title || 'Untitled'}</h3>
-                         <p className="text-xs text-zinc-500 font-mono mt-1">#: {invoice.invoiceNumber}</p>
+                         <span className="bg-[#bf953f]/10 border border-[#bf953f]/30 text-[#bf953f] text-[10px] font-serif font-bold italic px-2 py-1 inline-block uppercase tracking-widest mb-3">{invoice.status}</span>
+                         <h3 className="font-serif font-bold italic text-lg text-[#fcf6ba] group-hover:text-[#bf953f] transition-colors">{invoice.title || 'Untitled'}</h3>
+                         <p className="text-xs text-[#a09e91] font-serif italic mt-1 uppercase tracking-widest">#: {invoice.invoiceNumber}</p>
                        </div>
-                       <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center font-serif text-zinc-400">
+                       <div className="w-12 h-12 rounded-full border border-[#bf953f]/30 bg-gradient-to-br from-[#1a1a1a] to-[#0f1115] flex items-center justify-center font-serif font-black italic text-lg text-[#bf953f] shadow-inner">
                          {invoice.customerInfo.name ? invoice.customerInfo.name.charAt(0).toUpperCase() : '?'}
                        </div>
                      </div>
-                     <div className="flex justify-between items-end pt-4 border-t border-zinc-800/60">
+                     <div className="flex justify-between items-end pt-4 border-t border-[#bf953f]/10">
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Value</p>
-                          <p className="font-semibold text-lg text-zinc-200">{formatCurrency(computeInvoiceTotals(invoice).grandTotal, invoice.currency)}</p>
+                          <p className="text-[10px] font-serif font-bold italic uppercase tracking-widest text-[#a09e91] mb-1">Value</p>
+                          <p className="font-serif italic font-bold text-lg text-[#fcf6ba]">{formatCurrency(computeInvoiceTotals(invoice).grandTotal, invoice.currency)}</p>
                         </div>
-                        <div className="text-right text-xs text-zinc-500 flex items-center gap-1.5">
-                          <CalendarDays className="w-3.5 h-3.5"/> 
+                        <div className="text-right text-xs font-serif italic text-[#a09e91] flex items-center gap-1.5 uppercase tracking-widest">
+                          <CalendarDays className="w-3.5 h-3.5 text-[#bf953f]"/> 
                           {formatDate(invoice.updatedAt)}
                         </div>
                      </div>
@@ -512,29 +512,29 @@ export function Dashboard() {
 
           {/* B-09: Template Gallery — Real Previews */}
           <section>
-            <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-6 flex items-center gap-2">
-              <LayoutTemplate className="w-4 h-4" /> Template Gallery
+            <h2 className="text-xs font-serif font-bold uppercase tracking-widest text-[#a09e91] mb-6 flex items-center gap-2">
+              <LayoutTemplate className="w-4 h-4 text-[#bf953f]" /> Template Gallery
             </h2>
-            <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-3xl p-6 h-[600px] overflow-y-auto custom-scrollbar">
+            <div className="bg-[#15171c]/30 sketched-border border-[#bf953f]/30 p-6 h-[600px] overflow-y-auto custom-scrollbar">
               <div className="flex flex-col gap-4">
                 {TEMPLATES.slice(0, 10).map((tpl) => (
-                  <div key={tpl.id} onClick={() => startBlank(tpl.id)} className="p-4 rounded-xl border border-zinc-800 bg-zinc-900 hover:border-zinc-600 cursor-pointer group transition-all flex items-center gap-4 hover:shadow-lg hover:shadow-black/30">
+                  <div key={tpl.id} onClick={() => startBlank(tpl.id)} className="p-4 sketched-border border-[#bf953f]/20 bg-[#15171c]/50 hover:border-[#bf953f] hover:shadow-[0_0_15px_rgba(191,149,63,0.15)] cursor-pointer group transition-all flex items-center gap-4">
                     {/* B-09: Themed mini preview with accent color */}
-                    <div className="w-12 h-16 rounded-lg shadow-inner flex flex-col overflow-hidden border border-zinc-700/50 flex-shrink-0" style={{ backgroundColor: '#1a1a2e' }}>
-                      <div className="h-3 w-full" style={{ backgroundColor: tpl.defaultColor || '#4f46e5' }} />
-                      <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center">
-                        <div className="w-full h-[2px] rounded-full" style={{ backgroundColor: tpl.defaultColor || '#4f46e5', opacity: 0.5 }} />
-                        <div className="w-2/3 h-[2px] bg-zinc-600 rounded-full" />
-                        <div className="w-1/2 h-[2px] bg-zinc-700 rounded-full mt-1" />
-                        <div className="w-3/4 h-[2px] bg-zinc-700 rounded-full" />
+                    <div className="w-12 h-16 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden border border-[#bf953f]/30 flex-shrink-0" style={{ backgroundColor: '#fcf6ba' }}>
+                      <div className="h-3 w-full" style={{ backgroundColor: tpl.defaultColor || '#aa771c' }} />
+                      <div className="flex-1 p-1 flex flex-col gap-0.5 justify-center opacity-60 mix-blend-multiply">
+                        <div className="w-full h-[2px]" style={{ backgroundColor: tpl.defaultColor || '#aa771c', opacity: 0.8 }} />
+                        <div className="w-2/3 h-[2px] bg-black/40" />
+                        <div className="w-1/2 h-[2px] bg-black/20 mt-1" />
+                        <div className="w-3/4 h-[2px] bg-black/20" />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-sm text-zinc-200 group-hover:text-white truncate">{tpl.name}</h4>
-                      <p className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{tpl.description}</p>
+                      <h4 className="font-serif italic font-bold text-sm text-[#fcf6ba] group-hover:text-[#bf953f] truncate">{tpl.name}</h4>
+                      <p className="text-[11px] font-serif italic text-[#a09e91] mt-0.5 line-clamp-2">{tpl.description}</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <div className="w-3 h-3 rounded-full border border-zinc-700" style={{ backgroundColor: tpl.defaultColor || '#4f46e5' }} />
-                        <span className="text-[9px] text-zinc-600 uppercase tracking-wider font-medium">{tpl.category || 'Business'}</span>
+                        <div className="w-2.5 h-2.5 rounded-full border border-[#bf953f]/30" style={{ backgroundColor: tpl.defaultColor || '#aa771c' }} />
+                        <span className="text-[9px] text-[#bf953f] uppercase tracking-widest font-serif italic font-bold">{tpl.category || 'Business'}</span>
                       </div>
                     </div>
                   </div>
@@ -551,7 +551,7 @@ export function Dashboard() {
           <motion.div 
             key="ai-modal-backdrop"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-[#0f1115]/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
             onClick={(e) => e.target === e.currentTarget && setIsAICreateOpen(false)}
           >
              <motion.div 
@@ -559,24 +559,24 @@ export function Dashboard() {
                initial={{ opacity: 0, scale: 0.95, y: 20 }}
                animate={{ opacity: 1, scale: 1, y: 0 }}
                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-               className="bg-zinc-900 border border-zinc-700 rounded-3xl p-8 w-full max-w-xl shadow-2xl relative overflow-hidden"
+               className="bg-[#15171c] sketched-border border-[#bf953f]/30 p-8 w-full max-w-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden historical-shadow"
              >
                {/* Background Glow */}
-               <div className={`absolute top-0 left-0 w-full h-1/2 opacity-20 blur-3xl pointer-events-none ${aiMode === 'text' ? 'bg-indigo-500' : 'bg-emerald-500'}`}></div>
+               <div className={`absolute top-0 left-0 w-full h-1/2 opacity-20 blur-3xl pointer-events-none ${aiMode === 'text' ? 'bg-[#bf953f]' : 'bg-[#aa771c]'}`}></div>
 
                <div className="flex items-center justify-between mb-8 relative z-10">
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${aiMode === 'text' ? 'bg-indigo-500/20 text-indigo-400' : aiMode === 'voice' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                    <div className="w-12 h-12 flex items-center justify-center bg-gradient-to-br from-[#bf953f] to-[#aa771c] text-[#0f1115] shadow-inner sketched-border border-[#bf953f]">
                       {aiMode === 'text' ? <Type className="w-6 h-6" /> : aiMode === 'voice' ? <Mic className="w-6 h-6" /> : <Upload className="w-6 h-6" />}
                     </div>
                     <div>
-                      <h2 className="font-bold text-2xl text-white">
+                      <h2 className="font-serif italic font-bold text-2xl text-[#fcf6ba] gold-gradient-text">
                         {aiMode === 'text' ? 'Text-to-Invoice' : aiMode === 'voice' ? 'Voice Dictation' : 'OCR Extraction'}
                       </h2>
-                      <h3 className="text-zinc-100 font-semibold">{aiMode === 'text' ? 'Describe Invoice' : aiMode === 'voice' ? 'Voice Generation' : 'OCR Extraction'}</h3>
+                      <h3 className="text-[#a09e91] font-serif italic text-sm">{aiMode === 'text' ? 'Describe Invoice' : aiMode === 'voice' ? 'Voice Generation' : 'OCR Extraction'}</h3>
                     </div>
                   </div>
-                  <button onClick={() => { setIsAICreateOpen(false); setVoiceStage('idle'); setError(''); }} className="text-zinc-500 hover:text-white bg-zinc-800 p-2 rounded-full">
+                  <button onClick={() => { setIsAICreateOpen(false); setVoiceStage('idle'); setError(''); }} className="text-[#bf953f]/50 hover:text-[#bf953f] bg-[#1a1a1a] p-2 transition-colors sketched-border">
                     <X className="w-5 h-5" />
                   </button>
                </div>
@@ -586,18 +586,18 @@ export function Dashboard() {
                    <div className="flex flex-col items-center justify-center py-12 text-center">
                      {streamingStage === 'parsing' ? (
                        <>
-                         <Loader2 className="w-12 h-12 text-amber-500 animate-spin mb-4" />
-                         <p className="text-zinc-300 font-medium">Extracting text via OCR...</p>
-                         <p className="text-zinc-500 text-sm mt-2">This may take a moment depending on image quality.</p>
+                         <Loader2 className="w-12 h-12 text-[#bf953f] animate-spin mb-4" />
+                         <p className="text-[#fcf6ba] font-serif italic font-bold">Extracting text via OCR...</p>
+                         <p className="text-[#a09e91] font-serif italic text-sm mt-2">This may take a moment depending on image quality.</p>
                        </>
                      ) : streamingStage === 'generating' ? (
                        <>
                          <div className="relative mb-4">
-                           <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center animate-pulse">
-                             <Type className="w-6 h-6 text-indigo-400" />
+                           <div className="w-12 h-12 bg-[#bf953f]/20 flex items-center justify-center animate-pulse sketched-border border-[#bf953f]">
+                             <Type className="w-6 h-6 text-[#bf953f]" />
                            </div>
                          </div>
-                         <p className="text-zinc-300 font-medium">Structuring invoice data...</p>
+                         <p className="text-[#fcf6ba] font-serif italic font-bold">Structuring invoice data...</p>
                        </>
                      ) : null}
                    </div>
@@ -605,7 +605,7 @@ export function Dashboard() {
                    <textarea 
                      value={prompt} onChange={e => setPrompt(e.target.value)}
                      placeholder="e.g. Build an invoice for Acme Corp for website redesign, 40 hours at $100/hr, add 5% tax."
-                     className="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-5 text-base text-zinc-200 focus:outline-none focus:border-indigo-500 min-h-[160px] resize-none mb-4 shadow-inner"
+                     className="w-full bg-[#1a1a1a] sketched-border border-[#bf953f]/30 p-5 text-base text-[#fcf6ba] font-serif italic focus:outline-none focus:border-[#bf953f] min-h-[160px] resize-none mb-4 shadow-[inset_0_0_15px_rgba(0,0,0,0.5)] placeholder:text-[#a09e91]/50"
                    />
                  ) : (
                    <div className="mb-4">
@@ -619,23 +619,23 @@ export function Dashboard() {
                          onCancel={() => { setVoiceStage('idle'); setTranscript(''); }}
                        />
                      ) : (
-                       <div className="flex flex-col items-center justify-center py-12 bg-zinc-950 rounded-2xl border border-zinc-800">
+                       <div className="flex flex-col items-center justify-center py-12 bg-[#1a1a1a] sketched-border border-[#bf953f]/30 shadow-inner">
                          <button 
                            onClick={toggleRecording}
                            disabled={voiceStage === 'transcribing'}
-                           className={`w-24 h-24 rounded-full flex items-center justify-center transition-all disabled:opacity-50 ${isRecording ? 'bg-red-500/20 text-red-500 scale-110 shadow-[0_0_30px_rgba(239,68,68,0.3)]' : 'bg-zinc-800 text-zinc-400 hover:bg-emerald-500/20 hover:text-emerald-500'}`}
+                           className={`w-24 h-24 flex items-center justify-center transition-all disabled:opacity-50 sketched-border ${isRecording ? 'bg-red-950/40 text-red-500 scale-110 shadow-[0_0_30px_rgba(239,68,68,0.2)] border-red-500/50' : 'bg-[#15171c] text-[#bf953f]/50 hover:bg-[#bf953f]/10 hover:text-[#bf953f] border-[#bf953f]/20 hover:border-[#bf953f]/50'}`}
                          >
                            <Mic className={`w-10 h-10 ${isRecording ? 'animate-pulse' : ''}`} />
                          </button>
-                         <div className="mt-6 text-center">
+                         <div className="mt-6 text-center font-serif italic">
                            {voiceStage === 'transcribing' ? (
-                             <p className="text-indigo-400 font-medium flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Transcribing with Whisper...</p>
+                             <p className="text-[#bf953f] font-bold flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Transcribing with Whisper...</p>
                            ) : isRecording ? (
-                             <p className="text-red-400 font-medium animate-pulse flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full"></span> Recording in progress...</p>
+                             <p className="text-red-400 font-bold animate-pulse flex items-center gap-2"><span className="w-2 h-2 bg-red-500"></span> Recording in progress...</p>
                            ) : audioBlob ? (
-                             <p className="text-emerald-400 font-medium">Audio recorded. Ready to process.</p>
+                             <p className="text-emerald-400 font-bold">Audio recorded. Ready to process.</p>
                            ) : (
-                             <p className="text-zinc-500">Tap to start recording</p>
+                             <p className="text-[#a09e91]">Tap to start recording</p>
                            )}
                          </div>
                        </div>
@@ -645,17 +645,17 @@ export function Dashboard() {
 
                  {/* B-01: Streaming stage indicator */}
                  {streamingStage !== 'idle' && (
-                   <div className="mb-4 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center gap-2">
-                     <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-                     <span className="text-xs text-indigo-300 font-medium">
-                       {streamingStage === 'generating' ? 'AI is generating your invoice...' : 'Parsing response...'}
+                   <div className="mb-4 p-4 sketched-border border-[#bf953f]/30 bg-[#bf953f]/10 flex items-center gap-3">
+                     <Loader2 className="w-5 h-5 text-[#bf953f] animate-spin" />
+                     <span className="text-sm font-serif italic font-bold text-[#fcf6ba]">
+                       {streamingStage === 'generating' ? 'AI is composing your invoice...' : 'Analyzing the context...'}
                      </span>
                    </div>
                  )}
 
                  {/* Error display */}
                  {error && (
-                   <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                   <div className="mb-4 p-4 sketched-border border-red-900/50 bg-red-950/20 text-red-400 text-sm font-serif italic">
                      {error}
                    </div>
                  )}
@@ -667,7 +667,7 @@ export function Dashboard() {
                    <button 
                      disabled={isGenerating || (aiMode === 'text' ? !prompt : !audioBlob)} 
                      onClick={handleCreateAI} 
-                     className={`px-6 py-3 rounded-xl text-white font-bold flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${aiMode === 'text' ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+                     className={`px-8 py-3 text-[#0f1115] font-serif font-black italic tracking-wider flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-[#bf953f] to-[#aa771c] hover:from-[#fcf6ba] hover:to-[#bf953f] shadow-[0_0_20px_rgba(191,149,63,0.3)]`}
                    >
                      {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
                      {isGenerating ? 'Processing...' : 'Generate Invoice'}

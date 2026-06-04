@@ -33,6 +33,7 @@ interface StoreState {
   accessToken: string | null;
   refreshToken: string | null;
   setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void;
+  updateTokens: (accessToken: string, refreshToken: string) => void;
   clearAuth: () => void;
 
   addInvoice: (invoice: Invoice) => void;
@@ -88,6 +89,10 @@ export const useStore = create<StoreState>()(
       setAuth: (user, accessToken, refreshToken) => set({
         authUser: user,
         isAuthenticated: true,
+        accessToken,
+        refreshToken,
+      }),
+      updateTokens: (accessToken, refreshToken) => set({
         accessToken,
         refreshToken,
       }),

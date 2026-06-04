@@ -25,10 +25,10 @@ function Dropdown({ options, value, onChange, placeholder }: { options: {value: 
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full bg-zinc-900 border border-zinc-700/50 text-zinc-200 text-sm rounded-xl p-3 flex justify-between items-center focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all shadow-sm"
+        className="w-full bg-[#15171c]/50 sketched-border text-[#fcf6ba] font-serif italic text-sm p-3 flex justify-between items-center focus:outline-none focus:ring-1 focus:ring-[#bf953f] transition-all hover:shadow-[0_0_15px_rgba(191,149,63,0.1)]"
       >
         <span>{selected?.label || placeholder}</span>
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} className="text-zinc-500"><ChevronDown className="w-4 h-4" /></motion.div>
+        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} className="text-[#bf953f]"><ChevronDown className="w-4 h-4" /></motion.div>
       </button>
       <AnimatePresence>
         {isOpen && (
@@ -38,13 +38,13 @@ function Dropdown({ options, value, onChange, placeholder }: { options: {value: 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-[100] max-h-60 overflow-auto custom-scrollbar backdrop-blur-xl"
+            className="absolute top-full left-0 w-full mt-2 bg-[#15171c] border border-[#bf953f]/20 historical-shadow z-[100] max-h-60 overflow-auto custom-scrollbar"
           >
             {options.map(opt => (
               <button 
                 key={opt.value}
                 onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                className={`w-full text-left px-4 py-3 text-sm hover:bg-zinc-700 transition-colors ${value === opt.value ? 'text-indigo-400 bg-zinc-800/80' : 'text-zinc-300'}`}
+                className={`w-full text-left px-4 py-3 text-sm font-serif italic transition-colors ${value === opt.value ? 'text-[#bf953f] bg-[#bf953f]/10' : 'text-[#a09e91] hover:bg-[#1a1a1a] hover:text-[#fcf6ba]'}`}
               >
                 {opt.label}
               </button>
@@ -151,21 +151,21 @@ export function Editor() {
       <AIAssistantSidebar onGenerate={handleHandleAIGeneration} />
 
       {/* Main Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-full bg-zinc-950">
-        <header className="h-16 px-3 sm:px-6 flex justify-between items-center bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-10 shadow-sm transition-all duration-200">
+      <div className="flex-1 min-w-0 flex flex-col h-full bg-[#0f1115] bg-texture-canvas">
+        <header className="h-16 px-3 sm:px-6 flex justify-between items-center bg-[#15171c]/80 backdrop-blur-md border-b border-[#bf953f]/20 flex-shrink-0 z-10 shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-all duration-200">
           <div className="flex items-center gap-2 sm:gap-4 flex-shrink-1 min-w-0">
-            <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-white transition-colors bg-zinc-800/50 p-2 rounded-lg hover:bg-zinc-800 flex-shrink-0">
+            <button onClick={() => navigate('/')} className="text-[#a09e91] hover:text-[#fcf6ba] transition-colors bg-[#1a1a1a]/50 p-2 rounded-lg hover:bg-[#1a1a1a] flex-shrink-0 border border-transparent hover:border-[#bf953f]/30">
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="hidden sm:block h-5 w-px bg-zinc-800 flex-shrink-0"></div>
+            <div className="hidden sm:block h-5 w-px bg-[#bf953f]/20 flex-shrink-0"></div>
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <input 
                 value={invoice.title} 
                 onChange={(e) => updateInvoice(invoice.id, { title: e.target.value })}
-                className="bg-transparent text-sm font-semibold text-zinc-100 hover:bg-zinc-800 focus:bg-zinc-800 px-2 sm:px-3 py-1.5 rounded-lg outline-none transition-colors border border-transparent focus:border-zinc-700 w-full min-w-[60px] max-w-[12rem] md:max-w-[16rem] truncate"
+                className="bg-transparent text-lg font-serif italic font-bold text-[#fcf6ba] hover:bg-[#1a1a1a]/50 focus:bg-[#1a1a1a]/50 px-2 sm:px-3 py-1.5 rounded-lg outline-none transition-colors border border-transparent focus:border-[#bf953f]/50 w-full min-w-[60px] max-w-[12rem] md:max-w-[16rem] truncate"
                 placeholder="Invoice Title"
               />
-              <span className="inline-block px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-800/80 text-zinc-400 border border-zinc-700 flex-shrink-0">
+              <span className="inline-block px-2.5 py-1 rounded-sm text-[10px] font-serif font-bold italic uppercase tracking-widest bg-[#1a1a1a] text-[#bf953f] border border-[#bf953f]/30 flex-shrink-0">
                 {invoice.status}
               </span>
             </div>
@@ -174,25 +174,25 @@ export function Editor() {
             {/* Desktop only tools */}
             <div className="hidden lg:flex items-center gap-3">
               <SyncIndicator />
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 mx-2">
-                <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Undo">
+              <div className="flex items-center gap-1 bg-[#0f1115] p-1 rounded-lg border border-[#bf953f]/20 mx-2">
+                <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-[#a09e91] hover:text-[#fcf6ba] hover:bg-[#1a1a1a] rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Undo">
                   <Undo2 className="w-4 h-4" />
                 </button>
-                <div className="h-4 w-px bg-zinc-800"></div>
-                <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Redo">
+                <div className="h-4 w-px bg-[#bf953f]/20"></div>
+                <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-[#a09e91] hover:text-[#fcf6ba] hover:bg-[#1a1a1a] rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Redo">
                   <Redo2 className="w-4 h-4" />
                 </button>
               </div>
               <button
                 onClick={() => setIsAuditLogOpen(true)}
-                className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+                className="p-2 text-[#a09e91] hover:text-[#bf953f] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a] rounded-lg transition-colors border border-transparent hover:border-[#bf953f]/30"
                 title="Audit Log"
               >
                 <Shield className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setIsRecurringModalOpen(true)}
-                className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+                className="p-2 text-[#a09e91] hover:text-[#bf953f] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a] rounded-lg transition-colors border border-transparent hover:border-[#bf953f]/30"
                 title="Recurring Billing"
               >
                 <CalendarClock className="w-4 h-4" />
@@ -202,7 +202,7 @@ export function Editor() {
             {/* Always visible Primary Tools */}
             <button
               onClick={() => setIsEmailModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors"
+              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-serif font-bold italic text-[#bf953f] bg-[#bf953f]/10 border border-[#bf953f]/30 rounded-lg hover:bg-[#bf953f]/20 hover:text-[#fcf6ba] transition-colors"
               title="Email"
             >
               <Mail className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
@@ -211,7 +211,7 @@ export function Editor() {
             <button
               onClick={handlePrint}
               disabled={isGeneratingPDF}
-              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-serif font-bold italic text-[#0f1115] bg-gradient-to-r from-[#bf953f] to-[#aa771c] hover:from-[#fcf6ba] hover:to-[#bf953f] rounded-lg transition-colors shadow-[0_0_15px_rgba(191,149,63,0.3)] disabled:opacity-50"
               title="Export PDF"
             >
               {isGeneratingPDF ? <Loader2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
@@ -222,7 +222,7 @@ export function Editor() {
             <div className="relative lg:hidden">
               <button 
                 onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-                className="p-2 text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+                className="p-2 text-[#a09e91] hover:text-[#fcf6ba] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a] rounded-lg transition-colors border border-transparent hover:border-[#bf953f]/30"
               >
                 <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -233,31 +233,31 @@ export function Editor() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
                     transition={{ duration: 0.15 }}
-                    className="absolute top-full right-0 mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-[100] py-1"
+                    className="absolute top-full right-0 mt-2 w-48 bg-[#15171c] border border-[#bf953f]/20 rounded-xl shadow-2xl z-[100] py-1 historical-shadow"
                   >
-                    <div className="px-3 py-2 border-b border-zinc-700/50 flex justify-center">
+                    <div className="px-3 py-2 border-b border-[#bf953f]/20 flex justify-center">
                       <SyncIndicator />
                     </div>
-                    <div className="flex justify-around px-3 py-2 border-b border-zinc-700/50">
-                      <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded disabled:opacity-30 transition-colors" title="Undo">
+                    <div className="flex justify-around px-3 py-2 border-b border-[#bf953f]/20">
+                      <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-[#a09e91] hover:text-[#fcf6ba] hover:bg-[#1a1a1a] rounded disabled:opacity-30 transition-colors" title="Undo">
                         <Undo2 className="w-4 h-4" />
                       </button>
-                      <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded disabled:opacity-30 transition-colors" title="Redo">
+                      <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-[#a09e91] hover:text-[#fcf6ba] hover:bg-[#1a1a1a] rounded disabled:opacity-30 transition-colors" title="Redo">
                         <Redo2 className="w-4 h-4" />
                       </button>
                     </div>
                     <button 
                       onClick={() => { setIsAuditLogOpen(true); setIsMoreMenuOpen(false); }}
-                      className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-3 transition-colors"
+                      className="w-full text-left px-4 py-3 text-sm font-serif italic text-[#a09e91] hover:bg-[#1a1a1a] hover:text-[#fcf6ba] flex items-center gap-3 transition-colors"
                     >
-                      <Shield className="w-4 h-4 text-zinc-400" />
+                      <Shield className="w-4 h-4 text-[#bf953f]" />
                       Audit Log
                     </button>
                     <button 
                       onClick={() => { setIsRecurringModalOpen(true); setIsMoreMenuOpen(false); }}
-                      className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-3 transition-colors"
+                      className="w-full text-left px-4 py-3 text-sm font-serif italic text-[#a09e91] hover:bg-[#1a1a1a] hover:text-[#fcf6ba] flex items-center gap-3 transition-colors"
                     >
-                      <CalendarClock className="w-4 h-4 text-zinc-400" />
+                      <CalendarClock className="w-4 h-4 text-[#bf953f]" />
                       Recurring Billing
                     </button>
                   </motion.div>
@@ -267,7 +267,7 @@ export function Editor() {
           </div>
         </header>
 
-        <div className="invoice-canvas-container flex-1 overflow-auto bg-zinc-950/80 relative custom-scrollbar">
+        <div className="invoice-canvas-container flex-1 overflow-auto bg-[#0f1115]/80 relative custom-scrollbar">
           {/* Floating Zoom Controls */}
           <div className="fixed bottom-16 right-[340px] flex items-center bg-zinc-800 backdrop-blur-md rounded-full p-1.5 border border-zinc-700 shadow-2xl z-[100] print:hidden hidden md:flex">
              <button onClick={() => setZoom(Math.max(0.3, zoom - 0.1))} className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-700 transition-colors">
@@ -298,28 +298,27 @@ export function Editor() {
           </div>
         </div>
         
-        <footer className="h-10 px-6 flex flex-shrink-0 items-center justify-between border-t border-zinc-800 bg-zinc-900 text-[10px] text-zinc-500">
+        <footer className="h-10 px-6 flex flex-shrink-0 items-center justify-between border-t border-[#bf953f]/20 bg-[#15171c] text-[10px] font-serif font-bold italic tracking-widest uppercase text-[#a09e91]">
           <div className="flex gap-4 items-center">
             {/* B-13 FIX: Dynamic sync status instead of static "Saved" */}
             <SyncIndicator />
-            <span className="text-zinc-500 hidden sm:inline">Invoice: {invoice.invoiceNumber}</span>
+            <span className="text-[#a09e91] hidden sm:inline">Invoice: {invoice.invoiceNumber}</span>
           </div>
         </footer>
       </div>
 
       {/* Right Properties Sidebar */}
-      <div className="w-[320px] bg-zinc-900 flex flex-col h-full border-l border-zinc-800 flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
-         <div className="h-16 border-b border-zinc-800/80 flex items-center px-6 bg-zinc-900/80 backdrop-blur-sm z-30">
-           <label className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
-             <Palette className="w-4 h-4 text-indigo-400" /> Document Settings
+      <div className="w-[320px] bg-[#15171c] flex flex-col h-full border-l border-[#bf953f]/20 flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+         <div className="h-16 border-b border-[#bf953f]/20 flex items-center px-6 bg-[#15171c]/80 backdrop-blur-sm z-30">
+           <label className="text-xs font-serif font-bold text-[#fcf6ba] uppercase tracking-widest flex items-center gap-2">
+             <Palette className="w-4 h-4 text-[#bf953f]" /> Document Settings
            </label>
          </div>
          
          <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar relative">
-           <AnalysisSuggestionCard invoice={invoice} />
            
            <div className="space-y-3 relative z-40">
-             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Design Family</span>
+             <span className="text-[10px] font-serif font-bold text-[#a09e91] uppercase tracking-widest">Design Family</span>
              <Dropdown 
                value={invoice.templateId}
                onChange={(val) => updateInvoice(invoice.id, { templateId: val })}
@@ -329,12 +328,12 @@ export function Editor() {
            </div>
            
            <div className="space-y-3 relative z-30">
-             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Accent Color</span>
-             <div className="flex justify-between items-center bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50">
-               <span className="text-sm text-zinc-300">Custom Color</span>
+             <span className="text-[10px] font-serif font-bold text-[#a09e91] uppercase tracking-widest">Accent Color</span>
+             <div className="flex justify-between items-center bg-[#15171c]/50 p-3 sketched-border">
+               <span className="text-sm font-serif italic text-[#fcf6ba]">Custom Color</span>
                <input type="color" className="w-8 h-8 rounded border-0 bg-transparent cursor-pointer" value={invoice.themeColor} onChange={(e) => updateInvoice(invoice.id, { themeColor: e.target.value })} title="Custom Color" />
              </div>
-             <div className="grid grid-cols-5 gap-2 bg-zinc-900/50 p-3 rounded-xl border border-zinc-800/50">
+             <div className="grid grid-cols-5 gap-3 bg-[#15171c]/50 p-4 sketched-border">
                {['#4f46e5', '#059669', '#ea580c', '#e11d48', '#7c3aed', '#0f172a', '#2563eb', '#16a34a', '#d97706', '#be123c'].map(color => (
                  <button 
                    key={color}
@@ -349,8 +348,8 @@ export function Editor() {
            </div>
 
            <div className="space-y-3 relative z-20">
-             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><LayoutTemplate className="w-4 h-4 text-indigo-400" /> Document Modules</span>
-             <div className="grid grid-cols-2 gap-2">
+             <span className="text-[10px] font-serif font-bold text-[#a09e91] uppercase tracking-widest flex items-center gap-2"><LayoutTemplate className="w-4 h-4 text-[#bf953f]" /> Document Modules</span>
+             <div className="grid grid-cols-2 gap-3">
                {(function() {
                  const currentSettings = invoice.displaySettings || {
                    showTitle: true, showInvoiceId: true,
@@ -380,13 +379,13 @@ export function Editor() {
                          [module.key]: !currentSettings[module.key as keyof typeof currentSettings] 
                        } 
                      })}
-                     className={`p-3 rounded-xl border border-dotted text-center transition-all ${
+                     className={`p-3 sketched-border text-center transition-all ${
                        currentSettings[module.key as keyof typeof currentSettings] 
-                         ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300' 
-                         : 'border-zinc-700 bg-zinc-900/30 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                         ? 'border-[#bf953f] bg-[#bf953f]/10 text-[#fcf6ba] shadow-[0_0_15px_rgba(191,149,63,0.1)]' 
+                         : 'border-[#bf953f]/20 bg-[#15171c]/30 text-[#a09e91] hover:border-[#bf953f]/50 hover:text-[#fcf6ba]'
                      }`}
                    >
-                     <span className="text-[11px] font-semibold tracking-wide block truncate">{module.label}</span>
+                     <span className="text-[10px] font-serif italic tracking-widest uppercase block truncate">{module.label}</span>
                    </button>
                  ));
                })()}
@@ -394,7 +393,7 @@ export function Editor() {
            </div>
            
            <div className="space-y-3 relative z-10">
-             <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Currency Profile</span>
+             <span className="text-[10px] font-serif font-bold text-[#a09e91] uppercase tracking-widest">Currency Profile</span>
              <Dropdown 
                value={invoice.currency}
                onChange={(val) => updateInvoice(invoice.id, { currency: val })}
@@ -413,9 +412,9 @@ export function Editor() {
              />
            </div>
            
-           <div className="pt-8 border-t border-zinc-800/50 relative z-0">
+           <div className="pt-8 border-t border-[#bf953f]/20 relative z-0">
              <div className="space-y-3">
-               <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">Document State</label>
+               <label className="text-[10px] font-serif font-bold text-[#a09e91] uppercase tracking-widest block">Document State</label>
                {/* Issue 2.4: Expanded status options for enterprise workflows */}
                <Dropdown 
                  value={invoice.status}

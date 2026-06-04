@@ -26,8 +26,8 @@ export function SidebarNav() {
   return (
     <aside className="sidebar-nav w-20 flex flex-col items-center py-8 flex-shrink-0 z-20 h-screen bg-transparent">
       <div className="mb-12">
-        <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xl tracking-tighter text-white shadow-lg shadow-indigo-500/20">
-          AI
+        <div className="w-12 h-12 bg-gradient-to-br from-[#1a1a1a] to-[#0f1115] rounded-xl flex items-center justify-center font-serif font-black italic text-2xl gold-gradient-text gold-border historical-shadow">
+          Da
         </div>
       </div>
       <nav className="flex-1 flex flex-col gap-6 w-full px-4">
@@ -37,7 +37,7 @@ export function SidebarNav() {
              to={link.to}
              className={({ isActive }) => cn(
                "p-3 flex justify-center items-center rounded-xl transition-all group relative",
-               isActive ? "bg-zinc-800 text-indigo-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+               isActive ? "bg-[#15171c]/80 text-[#bf953f] sketched-border" : "text-zinc-500 hover:text-[#fcf6ba] hover:bg-[#15171c]/50 border border-transparent"
              )}
              title={link.label}
            >
@@ -46,10 +46,10 @@ export function SidebarNav() {
         ))}
       </nav>
       <div className="mt-auto flex flex-col gap-6 items-center">
-        <button className="p-3 text-zinc-500 hover:text-indigo-400 transition-colors">
+        <button className="p-3 text-zinc-500 hover:text-[#bf953f] transition-colors">
           <Bot className="w-6 h-6 stroke-[1.5]" />
         </button>
-        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold text-white border border-indigo-500/50" title={displayName}>
+        <div className="w-8 h-8 rounded-full bg-[#15171c] flex items-center justify-center text-xs font-serif font-black italic gold-gradient-text gold-border historical-shadow" title={displayName}>
           {initials}
         </div>
       </div>

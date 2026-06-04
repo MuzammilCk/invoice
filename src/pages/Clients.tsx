@@ -94,76 +94,76 @@ export function ClientsPage() {
   };
 
   return (
-    <div className="flex-1 min-h-screen bg-zinc-950 text-zinc-100 p-8 overflow-y-auto">
+    <div className="flex-1 min-h-screen bg-[#0f1115] bg-texture-canvas text-[#fcf6ba] p-8 overflow-y-auto font-sans">
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold">Clients</h1>
-            <p className="text-sm text-zinc-500 mt-1">{clients.length} client{clients.length !== 1 ? 's' : ''} across {invoices.length} invoices</p>
+            <h1 className="text-3xl font-serif italic gold-gradient-text">Clients</h1>
+            <p className="text-sm font-serif italic text-[#a09e91] mt-2">{clients.length} client{clients.length !== 1 ? 's' : ''} across {invoices.length} invoices</p>
           </div>
         </div>
 
         {/* CRM Summary Stats */}
         {clients.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Total Clients</p>
-              <p className="text-2xl font-bold text-zinc-100">{clients.length}</p>
+            <div className="bg-[#15171c]/50 sketched-border p-5">
+              <p className="text-[10px] font-serif font-bold uppercase tracking-widest text-[#a09e91] mb-2">Total Clients</p>
+              <p className="text-2xl font-serif italic text-[#fcf6ba]">{clients.length}</p>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">Total Revenue</p>
-              <p className="text-2xl font-bold text-zinc-100">{formatCurrency(totalRevenue, primaryCurrency)}</p>
+            <div className="bg-[#15171c]/50 sketched-border p-5">
+              <p className="text-[10px] font-serif font-bold uppercase tracking-widest text-[#a09e91] mb-2">Total Revenue</p>
+              <p className="text-2xl font-serif italic text-[#fcf6ba]">{formatCurrency(totalRevenue, primaryCurrency)}</p>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Collected</p>
-              <p className="text-2xl font-bold text-emerald-400">{formatCurrency(totalPaid, primaryCurrency)}</p>
+            <div className="bg-[#15171c]/50 sketched-border p-5">
+              <p className="text-[10px] font-serif font-bold uppercase tracking-widest text-emerald-600 mb-2">Collected</p>
+              <p className="text-2xl font-serif italic text-emerald-500">{formatCurrency(totalPaid, primaryCurrency)}</p>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-red-500 mb-1">Overdue</p>
-              <p className="text-2xl font-bold text-red-400">{formatCurrency(totalOverdue, primaryCurrency)}</p>
+            <div className="bg-[#15171c]/50 sketched-border p-5">
+              <p className="text-[10px] font-serif font-bold uppercase tracking-widest text-red-600 mb-2">Overdue</p>
+              <p className="text-2xl font-serif italic text-red-500">{formatCurrency(totalOverdue, primaryCurrency)}</p>
             </div>
           </div>
         )}
 
         {/* Search + Sort */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex gap-4 mb-8">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#bf953f]/50" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search clients by name or email..."
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-zinc-600"
+              className="w-full bg-[#15171c]/50 sketched-border pl-12 pr-4 py-4 text-sm font-serif italic text-[#fcf6ba] focus:outline-none focus:ring-1 focus:ring-[#bf953f] transition-all placeholder-[#bf953f]/30"
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="bg-[#15171c]/50 sketched-border px-4 py-4 text-sm font-serif italic text-[#bf953f] focus:outline-none focus:ring-1 focus:ring-[#bf953f] cursor-pointer appearance-none"
           >
-            <option value="revenue">Highest Revenue</option>
-            <option value="name">Name A→Z</option>
-            <option value="recent">Most Recent</option>
-            <option value="invoices">Most Invoices</option>
+            <option value="revenue" className="bg-[#15171c]">Highest Revenue</option>
+            <option value="name" className="bg-[#15171c]">Name A→Z</option>
+            <option value="recent" className="bg-[#15171c]">Most Recent</option>
+            <option value="invoices" className="bg-[#15171c]">Most Invoices</option>
           </select>
         </div>
 
         {/* Client Cards */}
         {filtered.length === 0 ? (
-          <div className="text-center py-20 text-zinc-500 bg-zinc-900/40 rounded-3xl border border-zinc-800/50 border-dashed">
-            <Users className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p className="text-sm">{searchQuery ? 'No clients match your search.' : 'No clients yet. Create your first invoice to get started.'}</p>
+          <div className="text-center py-24 text-[#a09e91] bg-[#15171c]/30 sketched-border border-[#bf953f]/10">
+            <Users className="w-12 h-12 mx-auto mb-4 opacity-20 text-[#bf953f]" />
+            <p className="text-sm font-serif italic">{searchQuery ? 'No clients match your search.' : 'No clients yet. Create your first invoice to get started.'}</p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {filtered.map((client, index) => (
               <motion.div
                 key={client.email || client.name}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-all group cursor-pointer"
+                className="bg-[#15171c]/50 sketched-border p-6 hover:shadow-[0_0_15px_rgba(191,149,63,0.1)] transition-all group cursor-pointer"
                 onClick={() => {
                   // Navigate to the most recent invoice for this client
                   if (client.invoiceIds.length > 0) {
@@ -172,39 +172,39 @@ export function ClientsPage() {
                 }}
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <div className="flex items-start gap-5 flex-1 min-w-0">
                     {/* Avatar */}
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                      client.totalOverdue > 0 ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-serif font-black italic flex-shrink-0 border ${
+                      client.totalOverdue > 0 ? 'bg-red-950/30 text-red-500 border-red-900/50' : 'bg-[#1a1a1a] text-[#bf953f] border-[#bf953f]/30'
                     }`}>
                       {client.name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 pt-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-zinc-100 truncate group-hover:text-indigo-400 transition-colors">{client.name}</h3>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <h3 className="text-lg font-serif italic text-[#fcf6ba] truncate group-hover:text-[#bf953f] transition-colors">{client.name}</h3>
+                        <ArrowUpRight className="w-4 h-4 text-[#bf953f]/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                       {client.email && (
-                        <div className="flex items-center gap-1.5 mt-1 text-xs text-zinc-500">
-                          <Mail className="w-3 h-3 flex-shrink-0" />
+                        <div className="flex items-center gap-2 mt-2 text-xs font-serif italic text-[#a09e91]">
+                          <Mail className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
                           <span className="truncate">{client.email}</span>
                         </div>
                       )}
                       {client.address && (
-                        <div className="flex items-center gap-1.5 mt-1 text-xs text-zinc-500">
-                          <MapPin className="w-3 h-3 flex-shrink-0" />
+                        <div className="flex items-center gap-2 mt-1.5 text-xs font-serif italic text-[#a09e91]">
+                          <MapPin className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
                           <span className="truncate">{client.address.split('\n')[0]}</span>
                         </div>
                       )}
 
                       {/* Status badges */}
-                      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                      <div className="flex items-center gap-2 mt-4 flex-wrap">
                         {Object.entries(client.statuses).map(([status, count]) => (
-                          <span key={status} className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                            status === 'paid' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25' :
-                            status === 'overdue' ? 'bg-red-500/15 text-red-400 border border-red-500/25' :
-                            status === 'sent' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/25' :
-                            'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                          <span key={status} className={`text-[10px] font-serif font-bold italic px-2.5 py-1 rounded-sm uppercase tracking-wider border ${
+                            status === 'paid' ? 'bg-emerald-950/30 text-emerald-500 border-emerald-900/50' :
+                            status === 'overdue' ? 'bg-red-950/30 text-red-500 border-red-900/50' :
+                            status === 'sent' ? 'bg-indigo-950/30 text-indigo-400 border-indigo-900/50' :
+                            'bg-[#1a1a1a]/50 text-[#a09e91] border-[#bf953f]/20'
                           }`}>
                             {count} {status}
                           </span>
@@ -214,18 +214,18 @@ export function ClientsPage() {
                   </div>
 
                   {/* Revenue + Health */}
-                  <div className="text-right flex-shrink-0 ml-4">
-                    <p className="text-base font-bold text-zinc-100">{formatCurrency(client.totalBilled, client.currency)}</p>
-                    <div className={`flex items-center gap-1 mt-1 text-xs justify-end ${getPaymentHealthColor(client)}`}>
+                  <div className="text-right flex-shrink-0 ml-4 pt-1">
+                    <p className="text-xl font-serif italic text-[#fcf6ba]">{formatCurrency(client.totalBilled, client.currency)}</p>
+                    <div className={`flex items-center gap-1.5 mt-2 text-xs font-serif italic justify-end ${getPaymentHealthColor(client) === 'text-emerald-400' ? 'text-emerald-500' : getPaymentHealthColor(client) === 'text-red-400' ? 'text-red-500' : getPaymentHealthColor(client) === 'text-amber-400' ? 'text-amber-500' : 'text-[#a09e91]'}`}>
                       {client.totalOverdue > 0 ? (
-                        <><AlertTriangle className="w-3 h-3" /> {formatCurrency(client.totalOverdue, client.currency)} overdue</>
+                        <><AlertTriangle className="w-3.5 h-3.5" /> {formatCurrency(client.totalOverdue, client.currency)} overdue</>
                       ) : client.totalPaid === client.totalBilled && client.totalBilled > 0 ? (
-                        <><CheckCircle2 className="w-3 h-3" /> Fully paid</>
+                        <><CheckCircle2 className="w-3.5 h-3.5" /> Fully paid</>
                       ) : (
-                        <><FileText className="w-3 h-3" /> {client.invoiceCount} invoice{client.invoiceCount !== 1 ? 's' : ''}</>
+                        <><FileText className="w-3.5 h-3.5" /> {client.invoiceCount} invoice{client.invoiceCount !== 1 ? 's' : ''}</>
                       )}
                     </div>
-                    <p className="text-[10px] text-zinc-600 mt-1.5 flex items-center gap-1 justify-end">
+                    <p className="text-[10px] font-serif italic text-[#bf953f]/70 mt-2 flex items-center gap-1.5 justify-end uppercase tracking-widest">
                       <Clock className="w-3 h-3" />
                       {formatDate(client.lastInvoiceDate)}
                     </p>

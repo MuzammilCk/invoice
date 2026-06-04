@@ -39,9 +39,9 @@ function Layout() {
   }, [navigate, location, onboardingComplete]);
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#0f1115] bg-texture-canvas text-zinc-100 overflow-hidden font-sans">
       {!isEditorMode && <SidebarNav />}
-      <main className={`flex-1 flex flex-col h-full overflow-hidden ${!isEditorMode ? 'rounded-l-[2rem] border-l border-zinc-800 shadow-2xl relative' : ''}`}>
+      <main className={`flex-1 flex flex-col h-full overflow-hidden ${!isEditorMode ? 'rounded-l-[2rem] border-l border-[#bf953f]/20 shadow-2xl relative bg-[#15171c]' : 'bg-[#0f1115]'}`}>
         {/* Subtle inner highlight to enhance the 'page' effect */}
         {!isEditorMode && <div className="absolute inset-0 rounded-l-[2rem] border-l border-white/5 pointer-events-none z-50"></div>}
         <Outlet />

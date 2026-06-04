@@ -1,4 +1,4 @@
-import { useAuth } from '../store/useAuth';
+import { useStore } from '../store/useStore';
 
 let isRefreshing = false;
 let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: any) => void; }[] = [];
@@ -19,7 +19,7 @@ export const apiClient = async (
   options: RequestInit = {},
   customHeaders: HeadersInit = {}
 ) => {
-  const { accessToken, refreshToken, updateTokens, logout } = useAuth.getState();
+  const { accessToken, refreshToken, updateTokens, clearAuth } = useStore.getState();
   
   const headers = new Headers({
     ...customHeaders,
@@ -74,7 +74,7 @@ export const apiClient = async (
       response = await fetch(endpoint, { ...options, headers });
     } catch (err) {
       processQueue(err, null);
-      logout();
+      clearAuth();
       window.location.href = '/login';
       return Promise.reject(err);
     } finally {

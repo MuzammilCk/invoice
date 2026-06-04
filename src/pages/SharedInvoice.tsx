@@ -115,49 +115,48 @@ export function SharedInvoicePage() {
   const subtotal = invoice.items.reduce((sum, item) => sum + item.quantity * item.rate, 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
+    <div className="min-h-screen bg-[#0f1115] bg-texture-canvas font-sans text-[#fcf6ba]">
       {/* Portal Header */}
-      <header className="sticky top-0 z-50 bg-zinc-900/80 backdrop-blur-xl border-b border-zinc-800">
+      <header className="sticky top-0 z-50 bg-[#15171c]/90 backdrop-blur-xl border-b border-[#bf953f]/20 historical-shadow">
         <div className="max-w-[900px] mx-auto px-4 sm:px-8 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-serif italic text-sm" 
-                   style={{ backgroundColor: invoice.themeColor || '#4f46e5' }}>
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-[#0f1115] font-serif font-black italic text-lg gold-gradient-text bg-gradient-to-br from-[#bf953f] to-[#aa771c] shadow-[0_0_15px_rgba(191,149,63,0.3)]">
                 {(invoice.businessInfo?.name || 'I').charAt(0).toUpperCase()}
               </div>
-              <h1 className="text-lg font-semibold text-zinc-100">{invoice.title || 'Invoice'}</h1>
+              <h1 className="text-xl font-serif italic text-[#fcf6ba]">{invoice.title || 'Invoice'}</h1>
             </div>
-            <div className="flex items-center gap-4 text-xs text-zinc-500">
-              <span className="font-mono">#{(invoice.invoiceNumber || 'DRAFT').toUpperCase()}</span>
+            <div className="flex items-center gap-5 text-xs font-serif italic text-[#a09e91] tracking-widest uppercase">
+              <span>#{(invoice.invoiceNumber || 'DRAFT').toUpperCase()}</span>
               {invoice.dueDate && (
                 <span>Due: {new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(invoice.dueDate))}</span>
               )}
-              <span className="flex items-center gap-1">
-                <Eye className="w-3 h-3" /> Viewed
+              <span className="flex items-center gap-1.5 opacity-70">
+                <Eye className="w-3.5 h-3.5" /> Viewed
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <button
               onClick={handleDownloadPDF}
               disabled={isDownloadingPDF}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-zinc-900 font-bold text-sm rounded-xl hover:bg-zinc-200 transition-all shadow-lg shadow-white/10 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-[#15171c] text-[#fcf6ba] font-serif italic text-sm sketched-border hover:text-[#bf953f] hover:border-[#bf953f]/50 transition-all shadow-lg disabled:opacity-50"
             >
-              {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-[#bf953f]" />}
               Download PDF
             </button>
             
             {/* Razorpay Payment Stub */}
             {invoice.status === 'paid' ? (
-              <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 text-emerald-500 font-bold text-sm rounded-xl border border-emerald-500/20">
+              <div className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-950/30 text-emerald-500 font-serif font-bold italic text-sm border border-emerald-900/50 shadow-[inset_0_0_15px_rgba(16,185,129,0.1)]">
                 <CheckCircle2 className="w-4 h-4" />
                 Paid
               </div>
             ) : (
               <button
                 disabled={isPaying}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#bf953f] to-[#aa771c] text-[#0f1115] font-serif font-bold italic text-sm hover:from-[#fcf6ba] hover:to-[#bf953f] transition-all shadow-[0_0_20px_rgba(191,149,63,0.3)] disabled:opacity-50"
                 onClick={handlePay}
               >
                 {isPaying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
@@ -169,16 +168,20 @@ export function SharedInvoicePage() {
       </header>
 
       {/* Invoice Content */}
-      <main className="max-w-[900px] mx-auto px-4 sm:px-8 py-8 sm:py-12">
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/40 overflow-hidden">
-          <InvoicePreview invoice={invoice} />
+      <main className="max-w-[900px] mx-auto px-4 sm:px-8 py-10 sm:py-16">
+        <div className="bg-[#fcf6ba] text-[#0f1115] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden historical-shadow border-4 border-[#bf953f]/20 relative">
+          {/* Da Vinci Canvas Texture Overlay for the white invoice area */}
+          <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/white-wall.png')] mix-blend-multiply z-10"></div>
+          <div className="relative z-0">
+            <InvoicePreview invoice={invoice} />
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-zinc-600">
+        <div className="mt-12 text-center border-t border-[#bf953f]/10 pt-6">
+          <p className="text-xs font-serif italic text-[#a09e91]">
             This invoice was shared securely via AI Invoice Studio. 
-            <span className="text-zinc-500 ml-1">Powered by local AI.</span>
+            <span className="text-[#bf953f]/50 ml-1 uppercase tracking-widest text-[10px]">Powered by local AI.</span>
           </p>
         </div>
       </main>
