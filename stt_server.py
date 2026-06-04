@@ -16,7 +16,7 @@ from faster_whisper import WhisperModel
 app = Flask(__name__)
 
 # ── Configuration ──
-MODEL_SIZE = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
+MODEL_SIZE = os.environ.get("WHISPER_MODEL", "D:/invoice/models/large-v3-turbo")
 COMPUTE_TYPE = os.environ.get("STT_COMPUTE_TYPE", "int8")
 DEVICE = "cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu"
 PORT = int(os.environ.get("STT_PORT", "5050"))

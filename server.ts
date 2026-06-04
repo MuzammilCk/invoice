@@ -541,10 +541,10 @@ async function startServer() {
     console.log(`[startup] Starting STT sidecar using command: ${pythonCmd}...`);
     
     sttProcess = spawn(pythonCmd, ['stt_server.py'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'inherit'],
       env: { 
         ...process.env, 
-        WHISPER_MODEL: process.env.WHISPER_MODEL ?? 'large-v3-turbo', 
+        WHISPER_MODEL: process.env.WHISPER_MODEL ?? 'D:/invoice/models/large-v3-turbo', 
         STT_PORT,
         HF_HUB_DISABLE_SYMLINKS_WARNING: '1',
         HF_HUB_DISABLE_EXPERIMENTAL_WARNING: '1'
@@ -564,7 +564,7 @@ async function startServer() {
     });
 
     // Wait for sidecar to be ready
-    const maxWait = 600_000; // 10 minutes for potential model download
+    const maxWait = 3_600_000; // 60 minutes for potential large model download
     const start = Date.now();
     let lastLogTime = start;
     
@@ -585,7 +585,7 @@ async function startServer() {
       
       await new Promise((r) => setTimeout(r, 1000));
     }
-    console.warn('[startup] STT sidecar did not become ready within timeout (10m). Audio features may be unavailable.');
+    console.warn('[startup] STT sidecar did not become ready within timeout (60m). Audio features may be unavailable.');
   }
 
   await startSTTSidecar();
