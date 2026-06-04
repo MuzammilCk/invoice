@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Invoice } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { apiClient } from '../lib/apiClient';
 
 const MAX_HISTORY_DEPTH = 50;
 
@@ -187,7 +188,8 @@ export const useStore = create<StoreState>()(
       }),
 
       syncToCloud: async () => {
-        if (!isSupabaseConfigured() || !supabase) {
+        const state = get();
+        if (!state.isAuthenticated || !state.authUser) {
           set({ syncStatus: 'offline' });
           return;
         }
@@ -195,59 +197,17 @@ export const useStore = create<StoreState>()(
         set({ syncStatus: 'syncing' });
 
         try {
-          const state = get();
           const invoices = state.invoices;
 
-          for (const invoice of invoices) {
-            const { error: invoiceError } = await supabase
-              .from('invoices')
-              .upsert({
-                id: invoice.id,
-                user_id: state.authUser?.id || 'local', // B-05 FIX: Use real user ID from auth state
-                invoice_number: invoice.invoiceNumber,
-                title: invoice.title || 'Invoice',
-                status: invoice.status || 'draft',
-                currency: invoice.currency,
-                tax_rate: invoice.taxRate,
-                discount_rate: invoice.discountRate || 0,
-                discount_type: invoice.discountType || 'percentage',
-                shipping: invoice.shipping || 0,
-                issue_date: invoice.issueDate,
-                due_date: invoice.dueDate,
-                notes: invoice.notes,
-                template_id: invoice.templateId,
-                theme_color: invoice.themeColor,
-                business_name: invoice.businessInfo?.name || '',
-                business_address: invoice.businessInfo?.address || '',
-                business_tax_id: invoice.businessInfo?.taxId || '',
-                customer_name: invoice.customerInfo?.name || '',
-                customer_email: invoice.customerInfo?.email || '',
-                customer_address: invoice.customerInfo?.address || '',
-                display_settings: invoice.displaySettings,
-                updated_at: new Date().toISOString(),
-              }, { onConflict: 'id' });
+          const response = await apiClient('/api/v1/sync/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ invoices }),
+          });
 
-            if (invoiceError) throw invoiceError;
-
-            await supabase
-              .from('invoice_items')
-              .delete()
-              .eq('invoice_id', invoice.id);
-
-            if (invoice.items.length > 0) {
-              const { error: itemsError } = await supabase
-                .from('invoice_items')
-                .insert(invoice.items.map((item, index) => ({
-                  id: item.id,
-                  invoice_id: invoice.id,
-                  description: item.description,
-                  quantity: item.quantity,
-                  rate: item.rate,
-                  sort_order: index,
-                })));
-
-              if (itemsError) throw itemsError;
-            }
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Sync failed');
           }
 
           set({
@@ -265,21 +225,18 @@ export const useStore = create<StoreState>()(
       },
 
       loadFromCloud: async () => {
-        if (!isSupabaseConfigured() || !supabase) return;
+        const state = get();
+        if (!state.isAuthenticated || !state.authUser) return;
 
         try {
           set({ syncStatus: 'syncing' });
 
-          const { data: invoices, error } = await supabase
-            .from('invoices')
-            .select(`
-              *,
-              invoice_items (*)
-            `)
-            .is('deleted_at', null)
-            .order('updated_at', { ascending: false });
+          const response = await apiClient('/api/v1/sync/pull');
+          if (!response.ok) {
+            throw new Error('Failed to fetch from cloud');
+          }
 
-          if (error) throw error;
+          const { invoices } = await response.json();
 
           if (invoices && invoices.length > 0) {
             const mapped = invoices.map((inv: any) => ({

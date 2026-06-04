@@ -9,7 +9,7 @@ import { EmailCompositionModal } from '../components/EmailCompositionModal';
 import { AuditLogDrawer } from '../components/AuditLogDrawer';
 import { AnalysisSuggestionCard } from '../components/AnalysisSuggestionCard';
 import { RecurringBillingModal } from '../components/RecurringBillingModal';
-import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown, Mail, Shield, CalendarClock } from 'lucide-react';
+import { Printer, Save, FileSignature, ArrowLeft, Palette, ZoomIn, ZoomOut, CheckCircle2, Undo2, Redo2, LayoutTemplate, Loader2, ChevronDown, Mail, Shield, CalendarClock, MoreVertical } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Invoice } from '../types';
 import { apiClient } from '../lib/apiClient';
@@ -69,6 +69,7 @@ export function Editor() {
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
 
   if (!invoice) {
     return <div className="flex h-screen items-center justify-center text-zinc-400">Invoice not found.</div>;
@@ -151,62 +152,118 @@ export function Editor() {
 
       {/* Main Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full bg-zinc-950">
-        <header className="h-16 px-6 flex justify-between items-center bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-10 shadow-sm">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-white transition-colors bg-zinc-800/50 p-2 rounded-lg hover:bg-zinc-800">
+        <header className="h-16 px-3 sm:px-6 flex justify-between items-center bg-zinc-900 border-b border-zinc-800 flex-shrink-0 z-10 shadow-sm transition-all duration-200">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-1 min-w-0">
+            <button onClick={() => navigate('/')} className="text-zinc-400 hover:text-white transition-colors bg-zinc-800/50 p-2 rounded-lg hover:bg-zinc-800 flex-shrink-0">
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="h-5 w-px bg-zinc-800"></div>
-            <div className="flex items-center gap-3">
+            <div className="hidden sm:block h-5 w-px bg-zinc-800 flex-shrink-0"></div>
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <input 
                 value={invoice.title} 
                 onChange={(e) => updateInvoice(invoice.id, { title: e.target.value })}
-                className="bg-transparent text-sm font-semibold text-zinc-100 hover:bg-zinc-800 focus:bg-zinc-800 px-3 py-1.5 rounded-lg outline-none transition-colors border border-transparent focus:border-zinc-700 w-48 truncate"
+                className="bg-transparent text-sm font-semibold text-zinc-100 hover:bg-zinc-800 focus:bg-zinc-800 px-2 sm:px-3 py-1.5 rounded-lg outline-none transition-colors border border-transparent focus:border-zinc-700 w-full min-w-[60px] max-w-[12rem] md:max-w-[16rem] truncate"
                 placeholder="Invoice Title"
               />
-              <span className="px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-800/80 text-zinc-400 border border-zinc-700">{invoice.status}</span>
+              <span className="inline-block px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-zinc-800/80 text-zinc-400 border border-zinc-700 flex-shrink-0">
+                {invoice.status}
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <SyncIndicator />
-            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 mx-2">
-              <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Undo">
-                <Undo2 className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+            {/* Desktop only tools */}
+            <div className="hidden lg:flex items-center gap-3">
+              <SyncIndicator />
+              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-zinc-800 mx-2">
+                <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Undo">
+                  <Undo2 className="w-4 h-4" />
+                </button>
+                <div className="h-4 w-px bg-zinc-800"></div>
+                <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Redo">
+                  <Redo2 className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                onClick={() => setIsAuditLogOpen(true)}
+                className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+                title="Audit Log"
+              >
+                <Shield className="w-4 h-4" />
               </button>
-              <div className="h-4 w-px bg-zinc-800"></div>
-              <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-colors" title="Redo">
-                <Redo2 className="w-4 h-4" />
+              <button
+                onClick={() => setIsRecurringModalOpen(true)}
+                className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+                title="Recurring Billing"
+              >
+                <CalendarClock className="w-4 h-4" />
               </button>
             </div>
-            <button
-              onClick={() => setIsAuditLogOpen(true)}
-              className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
-              title="Audit Log"
-            >
-              <Shield className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsRecurringModalOpen(true)}
-              className="p-2 text-zinc-400 hover:text-indigo-400 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
-              title="Recurring Billing"
-            >
-              <CalendarClock className="w-4 h-4" />
-            </button>
+
+            {/* Always visible Primary Tools */}
             <button
               onClick={() => setIsEmailModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors"
+              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-colors"
+              title="Email"
             >
-              <Mail className="w-3.5 h-3.5" />
-              Email
+              <Mail className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+              <span className="hidden xl:inline">Email</span>
             </button>
             <button
               onClick={handlePrint}
               disabled={isGeneratingPDF}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-bold text-zinc-950 bg-white rounded-lg hover:bg-zinc-200 transition-colors shadow-lg shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export PDF"
             >
-              {isGeneratingPDF ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Printer className="w-3.5 h-3.5" />}
-              {pdfProgress || 'Export PDF'}
+              {isGeneratingPDF ? <Loader2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 animate-spin" /> : <Printer className="w-4 h-4 sm:w-3.5 sm:h-3.5" />}
+              <span className="hidden xl:inline">{pdfProgress || 'Export PDF'}</span>
             </button>
+
+            {/* Mobile More Menu */}
+            <div className="relative lg:hidden">
+              <button 
+                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                className="p-2 text-zinc-400 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors shadow-sm"
+              >
+                <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              <AnimatePresence>
+                {isMoreMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute top-full right-0 mt-2 w-48 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-[100] py-1"
+                  >
+                    <div className="px-3 py-2 border-b border-zinc-700/50 flex justify-center">
+                      <SyncIndicator />
+                    </div>
+                    <div className="flex justify-around px-3 py-2 border-b border-zinc-700/50">
+                      <button onClick={undo} disabled={history.past.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded disabled:opacity-30 transition-colors" title="Undo">
+                        <Undo2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={redo} disabled={history.future.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded disabled:opacity-30 transition-colors" title="Redo">
+                        <Redo2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <button 
+                      onClick={() => { setIsAuditLogOpen(true); setIsMoreMenuOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-3 transition-colors"
+                    >
+                      <Shield className="w-4 h-4 text-zinc-400" />
+                      Audit Log
+                    </button>
+                    <button 
+                      onClick={() => { setIsRecurringModalOpen(true); setIsMoreMenuOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-700 flex items-center gap-3 transition-colors"
+                    >
+                      <CalendarClock className="w-4 h-4 text-zinc-400" />
+                      Recurring Billing
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </header>
 
@@ -293,7 +350,7 @@ export function Editor() {
 
            <div className="space-y-3 relative z-20">
              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2"><LayoutTemplate className="w-4 h-4 text-indigo-400" /> Document Modules</span>
-             <div className="bg-zinc-900/50 p-1.5 rounded-2xl border border-zinc-800/80 divide-y divide-zinc-800/30 shadow-inner">
+             <div className="grid grid-cols-2 gap-2">
                {(function() {
                  const currentSettings = invoice.displaySettings || {
                    showTitle: true, showInvoiceId: true,
@@ -315,25 +372,22 @@ export function Editor() {
                    { key: 'showNotes', label: 'Notes & Terms' },
                    { key: 'showPaymentMethods', label: 'Payment Box' },
                  ].map((module) => (
-                   <div key={module.key} className="flex justify-between items-center p-3 hover:bg-zinc-800/30 transition-colors rounded-lg">
-                     <span className="text-[13px] font-medium text-zinc-300 pointer-events-none">{module.label}</span>
-                     <button 
-                       onClick={() => updateInvoice(invoice.id, { 
-                         displaySettings: { 
-                           ...currentSettings, 
-                           [module.key]: !currentSettings[module.key as keyof typeof currentSettings] 
-                         } 
-                       })}
-                       className={`w-11 h-6 rounded-full relative transition-colors shadow-inner flex items-center border border-zinc-900/50 ${currentSettings[module.key as keyof typeof currentSettings] ? 'bg-indigo-500' : 'bg-zinc-700/80'}`}
-                     >
-                       <motion.div 
-                         layout
-                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                         className="w-4 h-4 bg-white rounded-full absolute shadow-sm"
-                         style={{ left: currentSettings[module.key as keyof typeof currentSettings] ? 'calc(100% - 1.25rem)' : '0.25rem' }}
-                       />
-                     </button>
-                   </div>
+                   <button
+                     key={module.key}
+                     onClick={() => updateInvoice(invoice.id, { 
+                       displaySettings: { 
+                         ...currentSettings, 
+                         [module.key]: !currentSettings[module.key as keyof typeof currentSettings] 
+                       } 
+                     })}
+                     className={`p-3 rounded-xl border border-dotted text-center transition-all ${
+                       currentSettings[module.key as keyof typeof currentSettings] 
+                         ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300' 
+                         : 'border-zinc-700 bg-zinc-900/30 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                     }`}
+                   >
+                     <span className="text-[11px] font-semibold tracking-wide block truncate">{module.label}</span>
+                   </button>
                  ));
                })()}
              </div>

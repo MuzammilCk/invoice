@@ -40,8 +40,14 @@ const ollama = new OpenAI({
 
 // ── Supabase Configuration ──
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+}) : null;
+
+if (!SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV !== 'test') {
+  console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY not set. Backend sync endpoints will fail.');
+}
 
 // ── Issue 7.1: API authentication ──
 const API_SECRET = process.env.API_SECRET;
@@ -318,6 +324,7 @@ async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
     browserInstance = await puppeteer.launch({
       headless: true,
+      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -853,6 +860,107 @@ EXPANDED FIELD RULES:
     res.json({ id: user.id, email: user.email, name: user.name });
   });
 
+  // ── Sync Routes (Proxy to Supabase) ──
+  v1.post('/sync/push', requireAuth, async (req, res): Promise<void> => {
+    try {
+      if (!supabaseAdmin) {
+        res.status(500).json({ error: 'Supabase admin client not configured.' });
+        return;
+      }
+      
+      const userId = (req as any).userId;
+      const { invoices } = req.body;
+      
+      if (!Array.isArray(invoices)) {
+        res.status(400).json({ error: 'Invoices must be an array.' });
+        return;
+      }
+      
+      for (const invoice of invoices) {
+        const { error: invoiceError } = await supabaseAdmin
+          .from('invoices')
+          .upsert({
+            id: invoice.id,
+            user_id: userId,
+            invoice_number: invoice.invoiceNumber,
+            title: invoice.title || 'Invoice',
+            status: invoice.status || 'draft',
+            currency: invoice.currency,
+            tax_rate: invoice.taxRate,
+            discount_rate: invoice.discountRate || 0,
+            discount_type: invoice.discountType || 'percentage',
+            shipping: invoice.shipping || 0,
+            issue_date: invoice.issueDate,
+            due_date: invoice.dueDate,
+            notes: invoice.notes,
+            template_id: invoice.templateId,
+            theme_color: invoice.themeColor,
+            business_name: invoice.businessInfo?.name || '',
+            business_address: invoice.businessInfo?.address || '',
+            business_tax_id: invoice.businessInfo?.taxId || '',
+            customer_name: invoice.customerInfo?.name || '',
+            customer_email: invoice.customerInfo?.email || '',
+            customer_address: invoice.customerInfo?.address || '',
+            display_settings: invoice.displaySettings,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+
+        if (invoiceError) throw invoiceError;
+
+        await supabaseAdmin
+          .from('invoice_items')
+          .delete()
+          .eq('invoice_id', invoice.id);
+
+        if (invoice.items && invoice.items.length > 0) {
+          const { error: itemsError } = await supabaseAdmin
+            .from('invoice_items')
+            .insert(invoice.items.map((item: any, index: number) => ({
+              id: item.id,
+              invoice_id: invoice.id,
+              description: item.description,
+              quantity: item.quantity,
+              rate: item.rate,
+              sort_order: index,
+            })));
+
+          if (itemsError) throw itemsError;
+        }
+      }
+      
+      res.json({ success: true, syncedCount: invoices.length });
+    } catch (error) {
+      handleApiError(error, res, 'sync/push');
+    }
+  });
+
+  v1.get('/sync/pull', requireAuth, async (req, res): Promise<void> => {
+    try {
+      if (!supabaseAdmin) {
+        res.status(500).json({ error: 'Supabase admin client not configured.' });
+        return;
+      }
+      
+      const userId = (req as any).userId;
+      
+      const { data: invoices, error } = await supabaseAdmin
+        .from('invoices')
+        .select(`
+          *,
+          invoice_items (*)
+        `)
+        .eq('user_id', userId)
+        .is('deleted_at', null)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      
+      res.json({ invoices: invoices || [] });
+    } catch (error) {
+      handleApiError(error, res, 'sync/pull');
+    }
+  });
+
   // ── Validation Types ──
   interface ValidationIssue {
     code: string;
@@ -1253,8 +1361,8 @@ EXPANDED FIELD RULES:
 
       activeSchedules.set(scheduleId, task);
 
-      if (supabase) {
-        await supabase.from('recurring_schedules').insert({
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('recurring_schedules').insert({
           id: scheduleId,
           template_invoice_id: templateInvoiceId,
           frequency,
@@ -1287,8 +1395,8 @@ EXPANDED FIELD RULES:
       task.stop();
       activeSchedules.delete(scheduleId);
       
-      if (supabase) {
-        await supabase.from('recurring_schedules').delete().eq('id', scheduleId);
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('recurring_schedules').delete().eq('id', scheduleId);
       }
       
       res.json({ cancelled: true });
@@ -1307,8 +1415,8 @@ EXPANDED FIELD RULES:
   }
 
   // ── Load active schedules from Supabase on startup ──
-  if (supabase) {
-    supabase.from('recurring_schedules').select('*').eq('is_active', true)
+  if (supabaseAdmin) {
+    supabaseAdmin.from('recurring_schedules').select('*').eq('is_active', true)
       .then(({ data, error }) => {
         if (!error && data) {
           console.log(`[startup] Loaded ${data.length} recurring schedules from Supabase`);

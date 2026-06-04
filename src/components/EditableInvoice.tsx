@@ -143,7 +143,9 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
         </div>
 
         {activeTemplate.styles.headerLayout !== 'split' && (
-          <div className="flex justify-between mb-12 border-b border-slate-100 pb-8">
+          <div className={`flex justify-between mb-12 transition-all ${
+            (settings.showFrom || settings.showIssueDate || settings.showDueDate) ? 'border-b border-slate-100 pb-8' : ''
+          }`}>
             <AnimatePresence>
               {settings.showFrom && (
                 <motion.div key="from" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="w-64 relative group/section">
@@ -230,7 +232,9 @@ export function EditableInvoice({ invoice, updateInvoice, isExporting = false }:
           </div>
         </div>
 
-        <div className="mt-auto pt-8 border-t border-slate-150 flex justify-between items-end">
+        <div className={`mt-auto flex justify-between items-end transition-all ${
+          (settings.showNotes || settings.showPaymentMethods) ? 'pt-8 border-t border-slate-150' : ''
+        }`}>
           <div className="w-1/2 pr-8">
             <AnimatePresence>
               {settings.showNotes && (

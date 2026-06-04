@@ -29,6 +29,8 @@ function Layout() {
   const location = useLocation();
   const { onboardingComplete } = useStore();
 
+  const isEditorMode = location.pathname.startsWith('/editor/');
+
   useEffect(() => {
     // B-12 FIX: Use Zustand state instead of localStorage
     if (!onboardingComplete && location.pathname !== '/onboarding') {
@@ -38,8 +40,10 @@ function Layout() {
 
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-      <SidebarNav />
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
+      {!isEditorMode && <SidebarNav />}
+      <main className={`flex-1 flex flex-col h-full overflow-hidden ${!isEditorMode ? 'rounded-l-[2rem] border-l border-zinc-800 shadow-2xl relative' : ''}`}>
+        {/* Subtle inner highlight to enhance the 'page' effect */}
+        {!isEditorMode && <div className="absolute inset-0 rounded-l-[2rem] border-l border-white/5 pointer-events-none z-50"></div>}
         <Outlet />
       </main>
     </div>

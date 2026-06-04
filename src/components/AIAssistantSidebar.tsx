@@ -8,7 +8,6 @@ import { z } from 'zod';
 import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
 import { AIChangeDiff } from './AIChangeDiff';
 import { buildClientContext } from '../lib/ai-context';
-import { AISpeedBadge } from './AISpeedBadge';
 import { TranscriptReviewPanel } from './TranscriptReviewPanel';
 import { apiClient } from '../lib/apiClient';
 
@@ -413,7 +412,6 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
             <label className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
               <Bot className="w-4 h-4 text-indigo-400" /> AI Workbench
             </label>
-            <AISpeedBadge />
           </div>
           <div className="space-y-3">
             <textarea
@@ -568,17 +566,6 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
           )}
         </div>
 
-        <div className="mt-auto pt-8">
-          <div className="bg-gradient-to-br from-indigo-900/30 to-zinc-900/50 rounded-2xl p-5 border border-indigo-500/20 shadow-inner">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center shadow-lg shadow-indigo-500/50 text-white">
-                 <Sparkles className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-sm font-bold text-zinc-100">Local AI (Qwen3)</span>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed italic">"Powered by local AI. Type or speak in any language — Hindi, Tamil, Telugu, Malayalam, and 100+ more — to update your invoice."</p>
-          </div>
-        </div>
       </div>
     </div>
   );
