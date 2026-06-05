@@ -11,6 +11,8 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { spawn, ChildProcess } from 'child_process';
 import jwt from 'jsonwebtoken';
+import { createServer as createHttpServer } from 'http';
+import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import bcrypt from 'bcryptjs';
 import puppeteer, { Browser } from 'puppeteer';
 import cron from 'node-cron';
@@ -32,6 +34,7 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3:8b';
 const STT_PORT = process.env.STT_PORT ?? '5050';
 const STT_URL = `http://127.0.0.1:${STT_PORT}`;
+const STT_HEALTH_URL = `http://127.0.0.1:${parseInt(STT_PORT) + 1}`;
 
 const ollama = new OpenAI({
   baseURL: `${OLLAMA_HOST}/v1`,
@@ -572,7 +575,7 @@ async function startServer() {
     
     while (Date.now() - start < maxWait) {
       try {
-        const res = await fetch(`${STT_URL}/health`);
+        const res = await fetch(`${STT_HEALTH_URL}/health`);
         if (res.ok) {
           console.log('[startup] STT sidecar is ready.');
           return;
@@ -1062,7 +1065,7 @@ EXPANDED FIELD RULES:
     } catch {}
 
     try {
-      const r = await fetch(`${STT_URL}/health`);
+      const r = await fetch(`${STT_HEALTH_URL}/health`);
       sttOk = r.ok;
     } catch {}
 
@@ -1097,7 +1100,7 @@ EXPANDED FIELD RULES:
 
     // ── Check STT ──
     try {
-      const r = await fetch(`${STT_URL}/health`, { signal: AbortSignal.timeout(3000) });
+      const r = await fetch(`${STT_HEALTH_URL}/health`, { signal: AbortSignal.timeout(3000) });
       sttStatus = r.ok ? 'online' : 'offline';
     } catch {}
 
@@ -1626,45 +1629,6 @@ RULES:
     }
   });
 
-  // ── B-06: Route: Transcribe Audio Only (Stage 1 of split voice pipeline) ──
-  v1.post('/transcribe-audio', requireAuth, aiRateLimiter, upload.single('audio'), async (req, res): Promise<void> => {
-    try {
-      const audioFile = req.file;
-      if (!audioFile) {
-        res.status(400).json({ error: 'Audio file is required' });
-        return;
-      }
-
-      const sttResponse = await withRetry(async () => {
-        const r = await fetch(`${STT_URL}/transcribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio_b64: audioFile.buffer.toString('base64'),
-            mime_type: audioFile.mimetype || 'audio/webm',
-            language: req.body.language ?? null,
-          }),
-        });
-        if (!r.ok) throw new Error(`STT sidecar returned ${r.status}`);
-        return r.json();
-      });
-
-      const transcript: string = sttResponse.text || '';
-      const language: string = sttResponse.language ?? 'en';
-      const confidence: number = sttResponse.confidence ?? 0;
-
-      console.log(`[transcribe] Transcribed (${language}, ${confidence}%): ${transcript.substring(0, 100)}...`);
-
-      if (!transcript.trim()) {
-        res.status(400).json({ error: 'Could not transcribe any speech from the audio.' });
-        return;
-      }
-
-      res.json({ transcript, language, confidence });
-    } catch (error) {
-      handleApiError(error, res, 'transcribe-audio');
-    }
-  });
 
   // ── M-02: Route: Extract Text from Receipt via OCR (Tesseract.js) ──
   v1.post('/ocr-receipt', requireAuth, aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
@@ -1765,73 +1729,7 @@ RULES:
     }
   });
 
-  // ── Route: AI Audio to Invoice (Two-Stage Pipeline) ──
-  v1.post('/audio-to-invoice', aiRateLimiter, upload.single('audio'), async (req, res): Promise<void> => {
-    try {
-      const audioFile = req.file;
-      const promptContext = stripPIIFromPrompt(sanitizePrompt(
-        (req.body.prompt as string) || 'Extract invoice details from the spoken audio.'
-      ));
 
-      if (!audioFile) {
-        res.status(400).json({ error: 'Audio file is required' });
-        return;
-      }
-
-      // ── STAGE 1: Speech-to-Text via local sidecar ──
-      const sttResponse = await withRetry(async () => {
-        const r = await fetch(`${STT_URL}/transcribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            audio_b64: audioFile.buffer.toString('base64'),
-            mime_type: audioFile.mimetype || 'audio/webm',
-            language: req.body.language ?? null,
-          }),
-        });
-        if (!r.ok) throw new Error(`STT sidecar returned ${r.status}`);
-        return r.json();
-      });
-
-      const transcribedText: string = sttResponse.text;
-      const detectedLang: string = sttResponse.language ?? 'en';
-      console.log(`[audio] Transcribed (${detectedLang}): ${transcribedText.substring(0, 100)}...`);
-
-      if (!transcribedText || transcribedText.trim().length === 0) {
-        res.status(400).json({ error: 'Could not transcribe any speech from the audio.' });
-        return;
-      }
-
-      // ── STAGE 2: Transcribed text → Invoice JSON via Ollama ──
-      const finalPrompt = `Context: ${promptContext}\n\nUser Dictation (language: ${detectedLang}): ${transcribedText}`;
-
-      const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
-          messages: [
-            { role: 'system', content: invoiceSystemInstruction },
-            { role: 'user', content: finalPrompt },
-          ],
-          response_format: {
-            type: 'json_schema',
-            json_schema: { name: 'invoice', schema: invoiceSchema },
-          } as any,
-          temperature: 0.1,
-        })
-      );
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        res.status(500).json({ error: 'No content generated.' });
-        return;
-      }
-
-      const generatedData = JSON.parse(content);
-      res.json(generatedData);
-    } catch (error) {
-      handleApiError(error, res, 'audio-to-invoice');
-    }
-  });
   // ── Route: OCR Import (Image → Invoice Data) ──
   v1.post('/ocr-import', requireAuth, aiRateLimiter, upload.single('image'), async (req, res): Promise<void> => {
     try {
@@ -2400,7 +2298,7 @@ RULES:
 
   // ── Backward compatibility: redirect old routes to v1 ──
   app.post('/api/generate-invoice', (req, res) => res.redirect(307, '/api/v1/generate-invoice'));
-  app.post('/api/audio-to-invoice', (req, res) => res.redirect(307, '/api/v1/audio-to-invoice'));
+
   app.post('/api/rewrite', (req, res) => res.redirect(307, '/api/v1/rewrite'));
 
   // Vite middleware for development
@@ -2420,8 +2318,76 @@ RULES:
   }
 
   // ── Issue 7.4: Graceful shutdown handler ──
-  const server = app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = createHttpServer(app);
+
+  // ── WebSocket STT Proxy ──
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws/stt' });
+
+  wss.on('connection', (browserWs, req) => {
+    // ── Auth: verify JWT from query param ?token=<accessToken> ──
+    const url = new URL(req.url!, `http://localhost:${PORT}`);
+    const token = url.searchParams.get('token');
+
+    // Dev mode bypass (mirrors requireAuth middleware logic)
+    const isDevMode = process.env.NODE_ENV !== 'production'
+      && !process.env.JWT_SECRET
+      && !API_SECRET;
+
+    if (!isDevMode) {
+      if (!token) {
+        browserWs.close(4001, 'Authentication required');
+        return;
+      }
+      const payload = verifyToken(token, 'access');
+      if (!payload) {
+        browserWs.close(4003, 'Invalid or expired token');
+        return;
+      }
+      console.log(`[ws/stt] Authenticated session for user ${payload.sub}`);
+    }
+
+    // ── Proxy: open connection to Python sidecar ──
+    const sidecarWs = new WsClient(`ws://127.0.0.1:${STT_PORT}`);
+
+    sidecarWs.on('open', () => {
+      console.log('[ws/stt] Sidecar connection established');
+    });
+
+    browserWs.on('message', (data, isBinary) => {
+      if (sidecarWs.readyState === WsClient.OPEN) {
+        sidecarWs.send(data, { binary: isBinary });
+      }
+    });
+
+    sidecarWs.on('message', (data) => {
+      if (browserWs.readyState === browserWs.OPEN) {
+        browserWs.send(data);
+      }
+    });
+
+    browserWs.on('close', (code, reason) => {
+      console.log(`[ws/stt] Browser disconnected (${code})`);
+      if (sidecarWs.readyState === WsClient.OPEN) {
+        sidecarWs.close();
+      }
+    });
+
+    sidecarWs.on('close', () => {
+      if (browserWs.readyState === browserWs.OPEN) {
+        browserWs.close();
+      }
+    });
+
+    browserWs.on('error', (err) => console.error('[ws/stt] Browser WS error:', err));
+    sidecarWs.on('error', (err) => {
+      console.error('[ws/stt] Sidecar WS error:', err);
+      browserWs.close(1011, 'Sidecar error');
+    });
+  });
+
+  const server = httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[startup] Server running on http://localhost:${PORT}`);
+    console.log(`[startup] WebSocket STT endpoint: ws://localhost:${PORT}/ws/stt`);
     console.log(`[startup] Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`[startup] API auth: ${API_SECRET ? 'ENABLED' : 'DISABLED (no API_SECRET set)'}`);
     console.log(`[startup] AI Model: ${OLLAMA_MODEL} via ${OLLAMA_HOST}`);
@@ -2441,14 +2407,18 @@ RULES:
       browserInstance.close().catch(() => {});
       console.log('[shutdown] Puppeteer browser closed.');
     }
-    server.close(() => {
-      console.log('[shutdown] HTTP server closed.');
-      process.exit(0);
-    });
-    setTimeout(() => {
-      console.error('[shutdown] Forced exit after timeout.');
-      process.exit(1);
-    }, 10_000);
+    if (server) {
+      server.close(() => {
+        console.log('[shutdown] HTTP server closed.');
+        wss.close(() => console.log('[shutdown] WebSocket server closed.'));
+        process.exit(0);
+      });
+    } else {
+      setTimeout(() => {
+        console.error('[shutdown] Forced exit after timeout.');
+        process.exit(1);
+      }, 10_000);
+    }
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));

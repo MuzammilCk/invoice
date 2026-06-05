@@ -57,6 +57,15 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const speechRecognitionRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close(1001, 'Component unmounted');
+      }
+    };
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !invoice) return;
@@ -172,55 +181,109 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/ogg';
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       setVoiceStage('recording');
       setIsRecording(true);
       setTranscript('');
       setDetectedLanguage('');
+      setError('');
 
-      // ── Start Web Speech API for visual feedback (browser-side only) ──
+      const { accessToken } = useStore.getState();
+      const wsUrl = `ws://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        console.log('[ws/stt] Connected — streaming audio');
+        mediaRecorder.start(250);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data as string);
+          if (msg.type === 'partial') {
+            setTranscript(msg.text);
+          } else if (msg.type === 'final') {
+            setTranscript(msg.text);
+            setDetectedLanguage(msg.language || '');
+            setTranscriptConfidence(msg.confidence || 0);
+            setVoiceStage('transcript-review');
+            setIsGenerating(false);
+          } else if (msg.type === 'error') {
+            setError(msg.message || 'Transcription failed');
+            setVoiceStage('idle');
+            setIsGenerating(false);
+          }
+        } catch {}
+      };
+
+      ws.onerror = (err) => {
+        console.error('[ws/stt] WebSocket error:', err);
+        setError('WebSocket connection to STT failed. Check stt_server is running.');
+        setVoiceStage('idle');
+        setIsRecording(false);
+        setIsGenerating(false);
+      };
+
+      ws.onclose = (event) => {
+        if (event.code === 4001 || event.code === 4003) {
+          setError('Authentication failed. Please log in again.');
+          setVoiceStage('idle');
+        }
+      };
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+          event.data.arrayBuffer().then(buf => ws.send(buf));
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        if (speechRecognitionRef.current) {
+          speechRecognitionRef.current.stop();
+          speechRecognitionRef.current = null;
+        }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close(1000, 'Recording stopped');
+        }
+        setVoiceStage('transcribing');
+        setIsGenerating(true);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = ''; // Auto-detect
-
+        recognition.lang = '';
         recognition.onresult = (event: any) => {
-          let interimTranscript = '';
+          let interim = '';
           for (let i = event.resultIndex; i < event.results.length; i++) {
-            interimTranscript += event.results[i][0].transcript;
+            interim += event.results[i][0].transcript;
           }
-          setTranscript(interimTranscript);
+          setTranscript(interim);
         };
-
         speechRecognitionRef.current = recognition;
         recognition.start();
       }
 
-      // ── Start actual recording ──
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        // Stop Web Speech API
-        if (speechRecognitionRef.current) {
-          speechRecognitionRef.current.stop();
-          speechRecognitionRef.current = null;
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setVoiceStage('transcribing');
-        await handleAudioGenerate(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
     } catch (err: any) {
-      setError('Microphone access denied or unavailable.');
+      if (err.name === 'NotAllowedError') {
+        setError('Microphone access denied. Please allow microphone access and try again.');
+      } else {
+        setError('Microphone unavailable: ' + err.message);
+      }
       setVoiceStage('idle');
       setIsRecording(false);
     }
@@ -230,41 +293,6 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-    }
-  };
-
-  // B-06: Stage 1 — Transcribe only (STT), show transcript for review
-  const handleAudioGenerate = async (audioBlob: Blob) => {
-    if (!invoice) return;
-    setIsGenerating(true);
-    setError('');
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-
-      // Stage 1: Transcribe audio → get transcript + language + confidence
-      const response = await apiClient('/api/v1/transcribe-audio', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to transcribe audio');
-      }
-
-      const { transcript: sttTranscript, language, confidence } = await response.json();
-      setTranscript(sttTranscript);
-      setDetectedLanguage(language);
-      setTranscriptConfidence(confidence);
-
-      // Show review panel — user can edit before proceeding to Stage 2
-      setVoiceStage('transcript-review');
-    } catch (err: any) {
-      setError(err.message);
-      setVoiceStage('idle');
-    } finally {
-      setIsGenerating(false);
     }
   };
 
