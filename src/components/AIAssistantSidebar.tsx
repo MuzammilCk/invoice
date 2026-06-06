@@ -203,14 +203,26 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
+      let sttReady = false;
+
       ws.onopen = () => {
-        console.log('[ws/stt] Connected — streaming audio');
-        mediaRecorder.start(250);
+        console.log('[ws/stt] Connected — waiting for STT server ready signal');
+        // DO NOT start mediaRecorder here
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string);
+          
+          if (msg.type === 'stt_ready') {
+            if (!sttReady) {
+              sttReady = true;
+              mediaRecorder.start(250);
+              console.log('[ws/stt] STT ready — streaming audio');
+            }
+            return;
+          }
+          
           if (msg.type === 'partial') {
             setTranscript(msg.text);
           } else if (msg.type === 'final') {

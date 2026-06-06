@@ -614,7 +614,15 @@ async function startServer() {
           styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
           fontSrc: ["'self'", 'fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'blob:'],
-          connectSrc: ["'self'", "ws://localhost:24678", "wss://localhost:24678", "https://*.supabase.co", "wss://*.supabase.co"],
+          connectSrc: [
+            "'self'",
+            "ws://localhost:24678",
+            "wss://localhost:24678",
+            `ws://localhost:${PORT}`,
+            `wss://localhost:${PORT}`,
+            "https://*.supabase.co",
+            "wss://*.supabase.co",
+          ],
         },
       },
     })
@@ -2357,14 +2365,90 @@ RULES:
       console.log('[ws/stt] Sidecar connection established');
     });
 
+    let handshakeSent = false;
+    const sessionUid = randomUUID();
+
     browserWs.on('message', (data, isBinary) => {
-      if (sidecarWs.readyState === WsClient.OPEN) {
-        sidecarWs.send(data, { binary: isBinary });
+      if (sidecarWs.readyState !== WsClient.OPEN) return;
+      
+      // WhisperLive requires a JSON handshake as the FIRST message
+      // before it will accept binary audio frames
+      if (!handshakeSent) {
+        handshakeSent = true;
+        sidecarWs.send(JSON.stringify({
+          uid: sessionUid,
+          language: null,        // auto-detect
+          task: 'transcribe',
+          model: 'large-v3-turbo',
+          use_vad: true,
+        }));
+      }
+      
+      // Forward audio chunks (binary)
+      if (isBinary) {
+        sidecarWs.send(data, { binary: true });
       }
     });
 
+    // Track accumulated transcript across segments for this session
+    let accumulatedText = '';
+
     sidecarWs.on('message', (data) => {
-      if (browserWs.readyState === browserWs.OPEN) {
+      if (browserWs.readyState !== browserWs.OPEN) return;
+
+      try {
+        const msg = JSON.parse(data.toString());
+
+        // WhisperLive: server is ready to accept audio
+        if (msg.message === 'SERVER_READY') {
+          browserWs.send(JSON.stringify({
+            type: 'stt_ready',
+            backend: 'whisper-live',
+          }));
+          return;
+        }
+
+        // WhisperLive: live segment update (partial transcript)
+        if (msg.segments && msg.segments.length > 0 && msg.message !== 'DISCONNECT') {
+          // Build the running transcript from completed + in-progress segments
+          const completedText = msg.segments
+            .filter((s: any) => s.completed === true)
+            .map((s: any) => s.text.trim())
+            .join(' ');
+          const inProgressText = msg.segments
+            .filter((s: any) => s.completed === false)
+            .map((s: any) => s.text.trim())
+            .join(' ');
+          
+          accumulatedText = completedText;
+          const displayText = [completedText, inProgressText].filter(Boolean).join(' ');
+
+          browserWs.send(JSON.stringify({
+            type: 'partial',
+            text: displayText.trim(),
+          }));
+          return;
+        }
+
+        // WhisperLive: session complete (DISCONNECT signal)
+        if (msg.message === 'DISCONNECT') {
+          const finalText = (msg.segments || [])
+            .map((s: any) => s.text.trim())
+            .join(' ')
+            .trim();
+
+          browserWs.send(JSON.stringify({
+            type: 'final',
+            text: finalText || accumulatedText,
+            language: msg.language || 'en',
+            confidence: Math.round((msg.language_probability || 0.9) * 100),
+          }));
+          browserWs.close(1000, 'Session complete');
+          return;
+        }
+
+      } catch {
+        // Not JSON (binary heartbeat etc.) — pass through raw
         browserWs.send(data);
       }
     });

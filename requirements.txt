@@ -1,5 +1,18 @@
+# AI Invoice Studio - Python STT Sidecar Dependencies
+
+# ── Core WebSocket Server ──
 websockets>=12.0
+
+# ── Real-time Speech-to-Text & VAD ──
+# whisper-live provides Voice Activity Detection (silero_vad) and chunked real-time streaming
+whisper-live>=0.6.0
+# faster-whisper is the core STT engine used by whisper-live
 faster-whisper>=1.0
+
+# ── Audio Processing ──
+# PyAV is used for in-memory decoding of various audio formats (webm, opus, ogg, mp4, etc.)
 av>=11
 numpy>=1.26
+
+# ── Model Downloading ──
 hf_xet>=0.1.0
