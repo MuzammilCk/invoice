@@ -29,16 +29,17 @@ if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
   process.exit(1);
 }
 
-// ── Local AI Configuration ──
-const OLLAMA_HOST = process.env.OLLAMA_HOST ?? 'http://127.0.0.1:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3:8b';
+// ── LLM Configuration (backend-agnostic: vLLM, llama.cpp, Ollama, etc.) ──
+const LLM_HOST = process.env.LLM_HOST ?? process.env.OLLAMA_HOST ?? 'http://127.0.0.1:8000';
+const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen3-8b';
+const LLM_API_KEY = process.env.LLM_API_KEY ?? 'local-no-key-needed';
 const STT_PORT = process.env.STT_PORT ?? '5050';
 const STT_URL = `http://127.0.0.1:${STT_PORT}`;
 const STT_HEALTH_URL = `http://127.0.0.1:${parseInt(STT_PORT) + 1}`;
 
-const ollama = new OpenAI({
-  baseURL: `${OLLAMA_HOST}/v1`,
-  apiKey: 'ollama', // Required by the OpenAI SDK even for local Ollama
+const llm = new OpenAI({
+  baseURL: `${LLM_HOST}/v1`,
+  apiKey: LLM_API_KEY,
 });
 
 // ── Supabase Configuration ──
@@ -159,30 +160,30 @@ const upload = multer({
   },
 });
 
-// ── Typed error categories for Ollama-specific failures ──
-type OllamaErrorCategory =
-  | 'CONNECTION_REFUSED'    // Ollama not running
-  | 'MODEL_NOT_LOADED'     // Model not pulled yet
+// ── Typed error categories for LLM backend failures ──
+type LLMErrorCategory =
+  | 'CONNECTION_REFUSED'    // LLM server not running
+  | 'MODEL_NOT_LOADED'     // Model not available
   | 'RATE_LIMITED'          // Too many concurrent requests
   | 'SERVICE_UNAVAILABLE'  // Temporary overload
   | 'TIMEOUT'              // Request took too long
   | 'UNKNOWN';             // Unclassified
 
 interface TypedRetryError {
-  category: OllamaErrorCategory;
+  category: LLMErrorCategory;
   message: string;
   attempt: number;
   maxRetries: number;
   originalError: unknown;
 }
 
-function classifyOllamaError(err: any): OllamaErrorCategory {
+function classifyLLMError(err: any): LLMErrorCategory {
   const msg = err?.message ?? '';
   const code = err?.code ?? '';
   const status = err?.status ?? 0;
 
   if (code === 'ECONNREFUSED' || msg.includes('ECONNREFUSED')) return 'CONNECTION_REFUSED';
-  if (msg.includes('model') && (msg.includes('not found') || msg.includes('not loaded'))) return 'MODEL_NOT_LOADED';
+  if (status === 404 || (msg.includes('model') && (msg.includes('not found') || msg.includes('not loaded')))) return 'MODEL_NOT_LOADED';
   if (status === 429 || msg.includes('rate limit')) return 'RATE_LIMITED';
   if (status === 503 || msg.includes('UNAVAILABLE') || msg.includes('fetch failed')) return 'SERVICE_UNAVAILABLE';
   if (code === 'ETIMEDOUT' || msg.includes('timeout') || msg.includes('TIMEOUT')) return 'TIMEOUT';
@@ -201,7 +202,7 @@ async function withRetry<T>(
       return await fn();
     } catch (err: any) {
       lastError = err;
-      const category = classifyOllamaError(err);
+      const category = classifyLLMError(err);
       const isRetryable = ['CONNECTION_REFUSED', 'RATE_LIMITED', 'SERVICE_UNAVAILABLE', 'TIMEOUT'].includes(category);
 
       if (!isRetryable || attempt === maxRetries - 1) {
@@ -226,11 +227,11 @@ async function withRetry<T>(
 
 // ── Issue 7.6: Cloud Fallback ──
 async function callWithFallback(messages: any[], responseFormat: any): Promise<string> {
-  // ── Try local Ollama first ──
+  // ── Try local LLM first ──
   try {
     const response = await withRetry(() =>
-      ollama.chat.completions.create({
-        model: OLLAMA_MODEL,
+      llm.chat.completions.create({
+        model: LLM_MODEL,
         messages,
         response_format: responseFormat,
         temperature: 0.1,
@@ -239,9 +240,9 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
       500
     );
     return response.choices[0]?.message?.content ?? '';
-  } catch (ollamaErr: any) {
-    const category = classifyOllamaError(ollamaErr);
-    console.warn(`[fallback] Ollama failed (${category}). Checking cloud fallback...`);
+  } catch (llmErr: any) {
+    const category = classifyLLMError(llmErr);
+    console.warn(`[fallback] LLM failed (${category}). Checking cloud fallback...`);
 
     // ── Try cloud fallback if configured ──
     const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -269,7 +270,7 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
       }
     }
 
-    throw ollamaErr; // Re-throw if no fallback available
+    throw llmErr; // Re-throw if no fallback available
   }
 }
 
@@ -281,7 +282,7 @@ function sanitizePrompt(prompt: string): string {
     .trim();
 }
 
-// ── Defense-in-depth: Strip PII patterns from prompt before Ollama ──
+// ── Defense-in-depth: Strip PII patterns from prompt before LLM ──
 function stripPIIFromPrompt(prompt: string): string {
   let sanitized = prompt;
 
@@ -1056,12 +1057,12 @@ EXPANDED FIELD RULES:
 
   // Auth applied after public endpoints
   v1.get('/health', async (_req, res) => {
-    let ollamaOk = false;
+    let llmOk = false;
     let sttOk = false;
 
     try {
-      const r = await fetch(`${OLLAMA_HOST}/api/tags`);
-      ollamaOk = r.ok;
+      const r = await fetch(`${LLM_HOST}/v1/models`, { signal: AbortSignal.timeout(5000) });
+      llmOk = r.ok;
     } catch {}
 
     try {
@@ -1070,31 +1071,34 @@ EXPANDED FIELD RULES:
     } catch {}
 
     res.json({
-      status: ollamaOk && sttOk ? 'ok' : 'degraded',
-      ollama: ollamaOk,
+      status: llmOk && sttOk ? 'ok' : 'degraded',
+      llm: llmOk,
       stt: sttOk,
-      model: OLLAMA_MODEL,
+      model: LLM_MODEL,
     });
   });
 
   // ── Route: System Capabilities (model availability, speed tier, features) ──
   v1.get('/system/capabilities', async (_req, res): Promise<void> => {
-    let ollamaStatus: 'online' | 'offline' | 'degraded' = 'offline';
-    let ollamaModel = OLLAMA_MODEL;
-    let ollamaResponseTimeMs = -1;
+    let llmStatus: 'online' | 'offline' | 'degraded' = 'offline';
+    let llmModel = LLM_MODEL;
+    let llmResponseTimeMs = -1;
     let sttStatus: 'online' | 'offline' = 'offline';
 
-    // ── Check Ollama ──
+    // ── Check LLM backend (OpenAI-standard /v1/models) ──
     try {
       const start = Date.now();
-      const r = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(5000) });
-      ollamaResponseTimeMs = Date.now() - start;
+      const r = await fetch(`${LLM_HOST}/v1/models`, { signal: AbortSignal.timeout(5000) });
+      llmResponseTimeMs = Date.now() - start;
 
       if (r.ok) {
         const data = await r.json() as any;
-        const models = data.models || [];
-        const hasModel = models.some((m: any) => m.name === OLLAMA_MODEL || m.name.startsWith(OLLAMA_MODEL.split(':')[0]));
-        ollamaStatus = hasModel ? 'online' : 'degraded';
+        const models = data.data || data.models || [];
+        const hasModel = models.some((m: any) => {
+          const id = m.id || m.name || '';
+          return id === LLM_MODEL || id.includes(LLM_MODEL.split(':')[0]);
+        });
+        llmStatus = hasModel ? 'online' : 'degraded';
       }
     } catch {}
 
@@ -1106,19 +1110,19 @@ EXPANDED FIELD RULES:
 
     // ── Speed tier classification ──
     let speedTier: 'fast' | 'standard' | 'slow' | 'unknown' = 'unknown';
-    if (ollamaResponseTimeMs >= 0) {
-      if (ollamaResponseTimeMs < 100) speedTier = 'fast';
-      else if (ollamaResponseTimeMs < 500) speedTier = 'standard';
+    if (llmResponseTimeMs >= 0) {
+      if (llmResponseTimeMs < 100) speedTier = 'fast';
+      else if (llmResponseTimeMs < 500) speedTier = 'standard';
       else speedTier = 'slow';
     }
 
     res.json({
-      ollama: {
-        status: ollamaStatus,
-        model: ollamaModel,
-        responseTimeMs: ollamaResponseTimeMs,
+      llm: {
+        status: llmStatus,
+        model: llmModel,
+        responseTimeMs: llmResponseTimeMs,
         speedTier,
-        host: OLLAMA_HOST,
+        host: LLM_HOST,
       },
       stt: {
         status: sttStatus,
@@ -1129,7 +1133,7 @@ EXPANDED FIELD RULES:
         voiceInput: sttStatus === 'online',
         ocrImport: true,
         emailDraft: true,
-        analysis: ollamaStatus === 'online',
+        analysis: llmStatus === 'online',
         cloudSync: !!process.env.VITE_SUPABASE_URL,
       },
       cloudFallback: {
@@ -1463,9 +1467,9 @@ EXPANDED FIELD RULES:
 
       sendEvent('status', { stage: 'generating', message: 'AI is thinking...' });
 
-      // ── Stream from Ollama ──
-      const stream = await ollama.chat.completions.create({
-        model: OLLAMA_MODEL,
+      // ── Stream from LLM ──
+      const stream = await llm.chat.completions.create({
+        model: LLM_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: sanitizedPrompt },
@@ -1535,8 +1539,8 @@ EXPANDED FIELD RULES:
       }
 
       const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
+        llm.chat.completions.create({
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: sanitizedPrompt },
@@ -1602,8 +1606,8 @@ RULES:
 - Be specific and actionable. No generic advice.`;
 
       const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
+        llm.chat.completions.create({
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'You are an invoice analysis assistant. Return ONLY valid JSON with no preamble.' },
             { role: 'user', content: analysisPrompt },
@@ -1680,8 +1684,8 @@ RULES:
 
       sendEvent('status', { stage: 'generating', message: 'AI is generating invoice from transcript...' });
 
-      const stream = await ollama.chat.completions.create({
-        model: OLLAMA_MODEL,
+      const stream = await llm.chat.completions.create({
+        model: LLM_MODEL,
         messages: [
           { role: 'system', content: invoiceSystemInstruction },
           { role: 'user', content: finalPrompt },
@@ -1767,7 +1771,7 @@ RULES:
         return;
       }
 
-      // ── Stage 2: OCR text → Structured Invoice JSON via Ollama ──
+      // ── Stage 2: OCR text → Structured Invoice JSON via LLM ──
       const extractionPrompt = `The following text was extracted via OCR from a scanned invoice or receipt. Extract structured invoice data from it.
 
 OCR TEXT (may contain errors):
@@ -1785,8 +1789,8 @@ INSTRUCTIONS:
 - If the document is a receipt, convert it to invoice format.`;
 
       const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
+        llm.chat.completions.create({
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: invoiceSystemInstruction },
             { role: 'user', content: extractionPrompt },
@@ -1860,8 +1864,8 @@ RULES:
 - Do not include salutation placeholders like [Name] — use the actual client name.`;
 
       const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
+        llm.chat.completions.create({
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'You are a professional business email writer. Return only the email text: subject on line 1, body after a blank line. No markdown, no explanation.' },
             { role: 'user', content: prompt },
@@ -1975,8 +1979,8 @@ RULES:
       const prompt = `Rewrite the following text to sound highly professional, suitable for a large MNC enterprise invoice or billing document. Context about the component: ${sanitizedContext}. Text to rewrite: ${sanitizedText}`;
 
       const response = await withRetry(() =>
-        ollama.chat.completions.create({
-          model: OLLAMA_MODEL,
+        llm.chat.completions.create({
+          model: LLM_MODEL,
           messages: [
             { role: 'system', content: 'You are a professional business writing editor. Rewrite text to be polished, concise, and corporate-appropriate. Return ONLY the rewritten text with no explanation or preamble.' },
             { role: 'user', content: prompt },
@@ -2390,7 +2394,7 @@ RULES:
     console.log(`[startup] WebSocket STT endpoint: ws://localhost:${PORT}/ws/stt`);
     console.log(`[startup] Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`[startup] API auth: ${API_SECRET ? 'ENABLED' : 'DISABLED (no API_SECRET set)'}`);
-    console.log(`[startup] AI Model: ${OLLAMA_MODEL} via ${OLLAMA_HOST}`);
+    console.log(`[startup] LLM: ${LLM_MODEL} via ${LLM_HOST}`);
     console.log(`[startup] STT Sidecar: http://localhost:${STT_PORT}`);
   });
 

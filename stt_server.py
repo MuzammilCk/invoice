@@ -1,18 +1,19 @@
 """
 AI Invoice Studio — Speech-to-Text Sidecar (WebSocket Streaming)
-Runs NeMo RNNT for local real-time streaming transcription.
-Falls back to faster-whisper if NeMo is unavailable.
+In-memory audio decoding via PyAV — zero disk I/O, zero subprocess forks.
+Falls back gracefully from NeMo → faster-whisper.
 """
 
 import os
 import sys
+import io
 import asyncio
-import websockets
 import json
 import logging
-import base64
-import tempfile
-import subprocess
+
+import av
+import numpy as np
+import websockets
 
 # ── Configuration ──
 PORT = int(os.environ.get("STT_PORT", "5050"))
@@ -51,72 +52,104 @@ except Exception as e:
     BACKEND = "whisper-live"
     MODEL_INFO = model_name
 
+
+# ── In-Memory Audio Decoder (Plan 2) ──
+def decode_audio_inmemory(audio_bytes: bytes) -> np.ndarray:
+    """
+    Decode any audio container (webm/opus, ogg, mp4, mpeg) from raw bytes
+    into a 16 kHz mono float32 numpy array — no disk writes, no subprocess.
+
+    Returns a float32 numpy array normalised to [-1.0, 1.0].
+    """
+    buf = io.BytesIO(audio_bytes)
+    container = av.open(buf, format=None)  # auto-detect container
+
+    resampler = av.AudioResampler(
+        format='fltp',      # float planar — what faster-whisper expects
+        layout='mono',
+        rate=16000
+    )
+
+    chunks: list[np.ndarray] = []
+    for frame in container.decode(audio=0):
+        resampled = resampler.resample(frame)
+        for r in resampled:
+            chunks.append(r.to_ndarray().flatten())
+
+    # Flush resampler (drains any buffered samples)
+    for r in resampler.resample(None):
+        chunks.append(r.to_ndarray().flatten())
+
+    container.close()
+
+    if not chunks:
+        raise ValueError("No audio frames decoded from input bytes")
+
+    return np.concatenate(chunks).astype(np.float32)
+
+
 async def transcribe_handler(websocket):
-    """One WebSocket connection = one recording session"""
+    """One WebSocket connection = one recording session."""
     logging.info("[ws] Client connected to STT session")
-    
-    # We buffer audio chunks to transcribe at the end for faster-whisper fallback.
-    # For a full NeMo stream, we would use session.transcribe_chunk() in real-time.
+
+    # Buffer incoming audio chunks (binary WebSocket frames)
     audio_buffer = bytearray()
-    
+
     try:
         async for message in websocket:
             if isinstance(message, bytes):
                 audio_buffer.extend(message)
-                # Send a partial message so the frontend knows we're receiving
+                # Acknowledge receipt so the frontend knows we're listening
                 await websocket.send(json.dumps({"type": "partial", "text": "Listening..."}))
     except websockets.exceptions.ConnectionClosed:
         pass
-        
+
     logging.info(f"[ws] Session closed, finalizing transcription... (Buffered {len(audio_buffer)} bytes)")
-    
+
     if len(audio_buffer) == 0:
-        await websocket.send(json.dumps({"type": "error", "message": "No audio received"}))
+        try:
+            await websocket.send(json.dumps({"type": "error", "message": "No audio received"}))
+        except websockets.exceptions.ConnectionClosed:
+            pass
         return
 
-    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp_in:
-        tmp_in.write(audio_buffer)
-        tmp_in_path = tmp_in.name
-
-    tmp_wav_path = tmp_in_path + ".wav"
     try:
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", tmp_in_path, "-ar", "16000", "-ac", "1", "-f", "wav", tmp_wav_path],
-            capture_output=True, check=True
+        # ── In-memory decode: raw bytes → 16 kHz float32 numpy array ──
+        audio_array = decode_audio_inmemory(bytes(audio_buffer))
+        logging.info(f"[ws] Decoded {len(audio_array)} samples ({len(audio_array)/16000:.1f}s at 16 kHz)")
+
+        # ── Transcribe using the numpy array directly — no file path needed ──
+        segments, info = model.transcribe(
+            audio_array,
+            beam_size=5,
+            word_timestamps=False,
+            task="transcribe",
         )
-        
-        # Depending on backend, process the full wav
-        if is_nemo:
-            # NeMo batch transcribe
-            pass # Since we couldn't properly stream WebM above without PyAV, we do full file
-        else:
-            segments, info = model.transcribe(
-                tmp_wav_path,
-                beam_size=5,
-                word_timestamps=False,
-                task="transcribe",
-            )
-            text = " ".join([seg.text.strip() for seg in segments])
-            await websocket.send(json.dumps({
-                "type": "final",
-                "text": text,
-                "language": info.language,
-                "confidence": round(info.language_probability * 100)
-            }))
-    except subprocess.CalledProcessError as e:
-        await websocket.send(json.dumps({"type": "error", "message": "ffmpeg failed"}))
-        logging.error(f"ffmpeg error: {e.stderr.decode() if e.stderr else str(e)}")
+        text = " ".join([seg.text.strip() for seg in segments])
+
+        await websocket.send(json.dumps({
+            "type": "final",
+            "text": text,
+            "language": info.language,
+            "confidence": round(info.language_probability * 100),
+        }))
+
+    except av.error.InvalidDataError as e:
+        logging.error(f"[ws] PyAV decode error: {e}")
+        try:
+            await websocket.send(json.dumps({"type": "error", "message": "Could not decode audio format"}))
+        except websockets.exceptions.ConnectionClosed:
+            pass
     except Exception as e:
-        await websocket.send(json.dumps({"type": "error", "message": str(e)}))
-        logging.error(f"transcription error: {str(e)}")
-    finally:
-        if os.path.exists(tmp_in_path):
-            os.unlink(tmp_in_path)
-        if os.path.exists(tmp_wav_path):
-            os.unlink(tmp_wav_path)
+        logging.error(f"[ws] Transcription error: {e}")
+        try:
+            await websocket.send(json.dumps({"type": "error", "message": str(e)}))
+        except websockets.exceptions.ConnectionClosed:
+            pass
+
 
 async def health_handler(reader, writer):
-    """Minimal TCP HTTP for Node.js health polling"""
+    """Minimal TCP HTTP for Node.js health polling."""
     response_body = json.dumps({"status": "ok", "model": MODEL_INFO, "backend": BACKEND}).encode()
     response = (
         b"HTTP/1.1 200 OK\r\n"
@@ -129,15 +162,19 @@ async def health_handler(reader, writer):
     writer.close()
     await writer.wait_closed()
 
+
 async def main():
     logging.info(f"[stt] Starting WebSocket server on port {PORT}")
+    logging.info(f"[stt] Audio decode: in-memory PyAV (av {av.__version__})")
     ws_server = await websockets.serve(transcribe_handler, "0.0.0.0", PORT)
-    
+
     health_port = PORT + 1
     logging.info(f"[stt] Starting Health HTTP server on port {health_port}")
     health_server = await asyncio.start_server(health_handler, "0.0.0.0", health_port)
-    
+
     await asyncio.gather(ws_server.serve_forever(), health_server.serve_forever())
+
 
 if __name__ == "__main__":
     asyncio.run(main())
+
