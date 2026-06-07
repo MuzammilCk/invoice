@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { spawn, ChildProcess } from 'child_process';
@@ -85,7 +86,7 @@ if (!API_SECRET) {
 
 // ── JWT Configuration ──
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'production' ? '' : 'dev-secret-do-not-use-in-production');
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
@@ -142,10 +143,14 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
     return next();
   }
 
-  // Strategy 1: Bearer token (JWT)
+  // Strategy 1: Bearer token (JWT) or Cookie
   const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
+  let token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token && req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
+  }
+  
+  if (token) {
     const payload = verifyToken(token, 'access');
     if (payload) {
       (req as any).userId = payload.sub;
@@ -310,10 +315,9 @@ function stripPIIFromPrompt(prompt: string): string {
   sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL_REDACTED]');
 
   // Strip phone numbers (international formats)
-  sanitized = sanitized.replace(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/g, '[PHONE_REDACTED]');
+  sanitized = sanitized.replace(/(?:phone|tel|mobile|cell|mob)[\s:]*(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/gi, '[PHONE_REDACTED]');
 
   // Strip common tax ID patterns (SSN, EIN, PAN, GST, etc.)
-  sanitized = sanitized.replace(/\b\d{2,3}[-]?\d{2,3}[-]?\d{4}\b/g, '[TAXID_REDACTED]');
   sanitized = sanitized.replace(/\b[A-Z]{5}\d{4}[A-Z]\b/g, '[PAN_REDACTED]');
   sanitized = sanitized.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z]\d[A-Z0-9]{2}\b/g, '[GST_REDACTED]');
 
@@ -346,9 +350,16 @@ let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
+    const CHROME_PATH = process.env.CHROME_PATH || (
+      process.platform === 'win32'
+        ? 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe'
+        : process.platform === 'darwin'
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : '/usr/bin/google-chrome-stable'
+    );
     browserInstance = await puppeteer.launch({
       headless: true,
-      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      executablePath: CHROME_PATH,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -650,6 +661,7 @@ async function startServer() {
 
   // ── Issue 1.6: CORS configuration with regex support ──
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? `http://localhost:${PORT}`).split(',').map(o => o.trim());
+  app.use(cookieParser());
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -671,6 +683,7 @@ async function startServer() {
           callback(new Error(`Origin ${origin} not allowed by CORS`));
         }
       },
+      credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-Id'],
       maxAge: 600,
@@ -825,6 +838,8 @@ EXPANDED FIELD RULES:
       }
 
       const tokens = generateTokens(userId);
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.status(201).json({
         user: { id: userId, email: email.toLowerCase(), name: name || email.split('@')[0] },
         ...tokens,
@@ -872,6 +887,9 @@ EXPANDED FIELD RULES:
       }
 
       const tokens = generateTokens(user.id);
+      
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.json({
         user: { id: user.id, email: user.email, name: user.name },
         ...tokens,
@@ -883,7 +901,7 @@ EXPANDED FIELD RULES:
 
   v1.post('/auth/refresh', authRateLimiter, async (req, res): Promise<void> => {
     try {
-      const { refreshToken } = req.body;
+      const refreshToken = req.body.refreshToken || (req.cookies && req.cookies.refreshToken);
 
       if (!refreshToken || typeof refreshToken !== 'string') {
         res.status(400).json({ error: 'Refresh token is required.' });
@@ -910,6 +928,8 @@ EXPANDED FIELD RULES:
       }
 
       const tokens = generateTokens(payload.sub);
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.json(tokens);
     } catch (error) {
       handleApiError(error, res, 'auth/refresh');
@@ -944,8 +964,14 @@ EXPANDED FIELD RULES:
       }
       
       const userId = (req as any).userId;
-      const { invoices } = req.body;
+      const { invoices, deletedInvoiceIds } = req.body;
       
+      if (deletedInvoiceIds && deletedInvoiceIds.length > 0 && supabaseAdmin) {
+        for (const id of deletedInvoiceIds) {
+          await supabaseAdmin.from('invoices').delete().eq('id', id).eq('user_id', userId);
+        }
+      }
+
       if (!Array.isArray(invoices)) {
         res.status(400).json({ error: 'Invoices must be an array.' });
         return;
@@ -2077,26 +2103,26 @@ RULES:
 
       const token = randomUUID().replace(/-/g, '').slice(0, 16);
 
-      // Store in Supabase (or in-memory for local dev)
-      const shareData = {
-        invoiceId,
-        invoice, // B-08: Store invoice snapshot for public viewing/PDF
-        token,
-        accessLevel,
-        expiresAt: new Date(Date.now() + expiresInDays * 86400000).toISOString(),
-        isActive: true,
-        viewCount: 0,
-        createdAt: new Date().toISOString(),
-      };
+      const expiresAt = new Date(Date.now() + expiresInDays * 86400000).toISOString();
 
-      shareTokenStore.set(token, shareData);
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('share_tokens').insert({
+          invoice_id: invoiceId,
+          user_id: (req as any).userId,
+          token,
+          access_level: accessLevel,
+          expires_at: expiresAt,
+          is_active: true,
+          view_count: 0
+        });
+      }
 
       const shareUrl = `${req.protocol}://${req.get('host')}/shared/${token}`;
 
       res.json({
         token,
         url: shareUrl,
-        expiresAt: shareData.expiresAt,
+        expiresAt,
         accessLevel,
       });
     } catch (error) {
@@ -2108,7 +2134,38 @@ RULES:
   v1.get('/shared/:token', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();
+        if (data && data.invoices) {
+          shareData = {
+            isActive: data.is_active,
+            expiresAt: data.expires_at,
+            accessLevel: data.access_level,
+            viewCount: data.view_count,
+            invoice: {
+              id: data.invoices.id,
+              invoiceNumber: data.invoices.invoice_number,
+              title: data.invoices.title,
+              status: data.invoices.status,
+              currency: data.invoices.currency,
+              taxRate: parseFloat(data.invoices.tax_rate),
+              discountRate: parseFloat(data.invoices.discount_rate),
+              discountType: data.invoices.discount_type,
+              shipping: parseFloat(data.invoices.shipping),
+              issueDate: data.invoices.issue_date,
+              dueDate: data.invoices.due_date,
+              notes: data.invoices.notes,
+              templateId: data.invoices.template_id,
+              themeColor: data.invoices.theme_color,
+              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },
+              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },
+              displaySettings: data.invoices.display_settings,
+              items: (data.invoices.invoice_items || []).sort((a: any,b: any)=>a.sort_order-b.sort_order).map((i: any) => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))
+            }
+          };
+        }
+      }
 
       if (!shareData) {
         res.status(404).json({ error: 'Share link not found or expired.' });
@@ -2125,8 +2182,6 @@ RULES:
         return;
       }
 
-      shareData.viewCount++;
-
       res.json({
         invoice: shareData.invoice,
         accessLevel: shareData.accessLevel,
@@ -2141,10 +2196,11 @@ RULES:
   v1.post('/shared/:token/view', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
-      if (shareData && shareData.isActive) {
-        shareData.viewCount = (shareData.viewCount || 0) + 1;
-        shareData.lastViewedAt = new Date().toISOString();
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('view_count, is_active').eq('token', token).single();
+        if (data && data.is_active) {
+          await supabaseAdmin.from('share_tokens').update({ view_count: data.view_count + 1 }).eq('token', token);
+        }
       }
       res.json({ success: true });
     } catch (error) {
@@ -2156,14 +2212,16 @@ RULES:
   v1.post('/shared/:token/pay', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*)').eq('token', token).single();
+        if (data) shareData = { isActive: data.is_active, invoice: { id: data.invoice_id } };
+      }
+
       if (!shareData || !shareData.isActive) {
         res.status(404).json({ error: 'Share link not found.' });
         return;
       }
-      
-      // Update the embedded snapshot
-      shareData.invoice.status = 'paid';
       
       // Attempt to update the original invoice in Supabase if exists
       if (supabaseAdmin) {
@@ -2184,7 +2242,35 @@ RULES:
     let page = null;
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();
+        if (data && data.invoices) {
+          shareData = {
+            isActive: data.is_active,
+            expiresAt: data.expires_at,
+            invoice: {
+              id: data.invoices.id,
+              title: data.invoices.title,
+              invoiceNumber: data.invoices.invoice_number,
+              currency: data.invoices.currency,
+              taxRate: parseFloat(data.invoices.tax_rate),
+              discountRate: parseFloat(data.invoices.discount_rate),
+              discountType: data.invoices.discount_type,
+              shipping: parseFloat(data.invoices.shipping),
+              issueDate: data.invoices.issue_date,
+              dueDate: data.invoices.due_date,
+              notes: data.invoices.notes,
+              templateId: data.invoices.template_id,
+              themeColor: data.invoices.theme_color,
+              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },
+              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },
+              displaySettings: data.invoices.display_settings,
+              items: (data.invoices.invoice_items || []).sort((a: any,b: any)=>a.sort_order-b.sort_order).map((i: any) => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))
+            }
+          };
+        }
+      }
 
       if (!shareData || !shareData.isActive || new Date(shareData.expiresAt) < new Date()) {
         res.status(404).json({ error: 'Share link not found, revoked, or expired.' });
@@ -2226,7 +2312,11 @@ RULES:
   v1.post('/shared/:token/mark-paid', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*').eq('token', token).single();
+        if (data) shareData = { isActive: data.is_active };
+      }
 
       if (!shareData || !shareData.isActive) {
         res.status(404).json({ error: 'Share link not found or revoked.' });
@@ -2234,13 +2324,12 @@ RULES:
       }
 
       // Razorpay integration stub — in production, verify payment with Razorpay API
-      shareData.markedPaidAt = new Date().toISOString();
-      shareData.paymentStatus = 'paid';
 
+      const markedPaidAt = new Date().toISOString();
       res.json({
         success: true,
         message: 'Invoice marked as paid. Razorpay integration coming soon.',
-        markedPaidAt: shareData.markedPaidAt,
+        markedPaidAt,
       });
     } catch (error) {
       handleApiError(error, res, 'shared-mark-paid');

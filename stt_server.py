@@ -66,30 +66,52 @@ def run_whisperlive():
         no_voice_activity_chunks=10,  # send final after 10 silent chunks
     )
 
+def monitor_thread():
+    global wl_thread
+    while True:
+        wl_thread.join()
+        logging.error("WhisperLive thread died. Restarting...")
+        wl_thread = threading.Thread(target=run_whisperlive, daemon=True)
+        wl_thread.start()
+
 # Start WhisperLive in its own daemon thread
 wl_thread = threading.Thread(target=run_whisperlive, daemon=True)
 wl_thread.start()
 logging.info(f"WhisperLive STT server started on port {PORT}")
 logging.info(f"Model: {MODEL_PATH} | Device: {DEVICE} | Compute: {COMPUTE}")
 
+monitor = threading.Thread(target=monitor_thread, daemon=True)
+monitor.start()
+
 
 # ── Health HTTP server (port+1) for Node.js startup polling ──
 import asyncio
 
 async def health_handler(reader, writer):
+    # Probe the WhisperLive WebSocket port
+    stt_alive = False
+    try:
+        probe_reader, probe_writer = await asyncio.wait_for(
+            asyncio.open_connection('127.0.0.1', PORT), timeout=1.0
+        )
+        probe_writer.close()
+        await probe_writer.wait_closed()
+        stt_alive = True
+    except Exception:
+        stt_alive = False
+
+    status_code = "200 OK" if stt_alive else "503 Service Unavailable"
     body = json.dumps({
-        "status": "ok",
+        "status": "ok" if stt_alive else "starting",
         "backend": "whisper-live",
         "model": MODEL_PATH,
-        "device": DEVICE,
+        "stt_port": PORT,
+        "stt_alive": stt_alive,
     }).encode()
     response = (
-        b"HTTP/1.1 200 OK\r\n"
-        b"Content-Type: application/json\r\n"
-        b"Connection: close\r\n"
-        + f"Content-Length: {len(body)}\r\n\r\n".encode()
-        + body
-    )
+        f"HTTP/1.1 {status_code}\r\nContent-Type: application/json\r\nConnection: close\r\n"
+        f"Content-Length: {len(body)}\r\n\r\n"
+    ).encode() + body
     writer.write(response)
     await writer.drain()
     writer.close()

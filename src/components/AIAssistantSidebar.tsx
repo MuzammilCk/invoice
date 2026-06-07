@@ -198,7 +198,8 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       setError('');
 
       const { accessToken } = useStore.getState();
-      const wsUrl = `ws://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${wsProtocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';

@@ -1,259 +1,142 @@
 const fs = require('fs');
 
-let content = fs.readFileSync('server.ts', 'utf-8');
+let serverContent = fs.readFileSync('d:/projects/invoice/server.ts', 'utf8');
 
-// 1. Logging replacement
-// Replace console.* logs with log.* calls mapping arguments to msg and meta
-content = content.replace(/console\.log\(\`\\n📧 \[dev-email\] To: \$\{to\}\`\);/g, "log.info('Dev email To', { to });");
-content = content.replace(/console\.log\(\`📧 \[dev-email\] Subject: \$\{subject\}\`\);/g, "log.info('Dev email Subject', { subject });");
-content = content.replace(/console\.log\(\`📧 \[dev-email\] Body: \$\{\(body \|\| ''\)\.substring\(0, 200\)\}\.\.\.\`\);/g, "log.info('Dev email Body', { bodyPreview: (body || '').substring(0, 200) });");
-content = content.replace(/console\.log\(\`📧 \[dev-email\] PDF attached: \$\{\!\!pdfBuffer\} \(\$\{pdfBuffer \? pdfBuffer\.length : 0\} bytes\)\\n\`\);/g, "log.info('Dev email PDF', { attached: !!pdfBuffer, bytes: pdfBuffer ? pdfBuffer.length : 0 });");
-
-content = content.replace(/console\.log\(\`\[startup\] Server running on http:\/\/localhost:\$\{PORT\}\`\);/g, "log.info('Server running', { port: PORT });");
-content = content.replace(/console\.log\(\`\[startup\] WebSocket STT endpoint: ws:\/\/localhost:\$\{PORT\}\/ws\/stt\`\);/g, "log.info('WebSocket STT endpoint', { port: PORT });");
-content = content.replace(/console\.log\(\`\[startup\] Environment: \$\{process\.env\.NODE_ENV \|\| 'development'\}\`\);/g, "log.info('Environment', { env: process.env.NODE_ENV || 'development' });");
-content = content.replace(/console\.log\(\`\[startup\] API auth: \$\{API_SECRET \? 'ENABLED' : 'DISABLED \(no API_SECRET set\)'\}\`\);/g, "log.info('API auth', { enabled: !!API_SECRET });");
-content = content.replace(/console\.log\(\`\[startup\] LLM: \$\{LLM_MODEL\} via \$\{LLM_HOST\}\`\);/g, "log.info('LLM Config', { model: LLM_MODEL, host: LLM_HOST });");
-content = content.replace(/console\.log\(\`\[startup\] STT Sidecar: http:\/\/localhost:\$\{STT_PORT\}\`\);/g, "log.info('STT Sidecar configured', { port: STT_PORT });");
-
-content = content.replace(/console\.log\('\[ws\/stt\] Sidecar connection established'\);/g, "log.info('Sidecar connection established');");
-content = content.replace(/console\.log\(\`\[ws\/stt\] Authenticated session for user \$\{userId\}\`\);/g, "log.info('Authenticated session', { userId });");
-content = content.replace(/console\.log\(\`\[ws\/stt\] Browser disconnected \(\$\{code\}\)\`\);/g, "log.info('Browser disconnected', { code });");
-content = content.replace(/console\.error\('\[ws\/stt\] Browser WS error:', err\);/g, "log.error('Browser WS error', { error: err.message });");
-content = content.replace(/console\.error\('\[ws\/stt\] Sidecar WS error:', err\);/g, "log.error('Sidecar WS error', { error: err.message });");
-
-content = content.replace(/console\.log\(`\[shutdown\] Received \$\{signal\}\. Graceful shutdown\.\.\.`\);/g, "log.info('Graceful shutdown initiated', { signal });");
-content = content.replace(/console\.log\('\[shutdown\] STT sidecar terminated\.'\);/g, "log.info('STT sidecar terminated');");
-content = content.replace(/console\.log\('\[shutdown\] Puppeteer browser closed\.'\);/g, "log.info('Puppeteer browser closed');");
-content = content.replace(/console\.log\('\[shutdown\] HTTP server closed\.'\);/g, "log.info('HTTP server closed');");
-content = content.replace(/console\.log\('\[shutdown\] WebSocket server closed\.'\)/g, "log.info('WebSocket server closed')");
-content = content.replace(/console\.error\('\[shutdown\] Forced exit after timeout\.'\);/g, "log.error('Forced exit after timeout');");
-
-content = content.replace(/console\.error\(`FATAL: \$\{key\} must NOT have VITE_ prefix\. It would leak to the browser bundle\.\`\);/g, "log.error('Leaked VITE variable', { key });");
-content = content.replace(/console\.error\(`FATAL: Invalid PORT value: "\$\{process\.env\.PORT\}"\`\);/g, "log.error('Invalid PORT value', { port: process.env.PORT });");
-content = content.replace(/console\.warn\('\[supabase\] SUPABASE_SERVICE_ROLE_KEY not set\. Backend sync endpoints will fail\.'\);/g, "log.warn('SUPABASE_SERVICE_ROLE_KEY not set');");
-content = content.replace(/console\.error\('FATAL: API_SECRET environment variable must be set in production to secure AI endpoints\.'\);/g, "log.error('API_SECRET not set in production');");
-content = content.replace(/console\.error\('FATAL: JWT_SECRET must be set in production\.'\);/g, "log.error('JWT_SECRET not set in production');");
-content = content.replace(/console\.log\(`\[auth\] Dev user seeded: admin@invoicestudio\.local \/ admin123\`\);/g, "log.info('Dev user seeded', { email: 'admin@invoicestudio.local' });");
-
-content = content.replace(/console\.error\(`\[retry\] Final failure: \$\{typedError\.message\}\`\);/g, "log.error('Retry final failure', { message: typedError.message });");
-content = content.replace(/console\.warn\(`\[retry\] \[\$\{category\}\] Retrying in \$\{delay\}ms \(attempt \$\{attempt \+ 1\}\/\$\{maxRetries\}\)\.\.\.\`\);/g, "log.warn('Retrying request', { category, delay, attempt: attempt + 1, maxRetries });");
-content = content.replace(/console\.warn\(`\[fallback\] LLM failed \(\$\{category\}\)\. Checking cloud fallback\.\.\.\`\);/g, "log.warn('LLM failed, checking cloud fallback', { category });");
-content = content.replace(/console\.log\('\[fallback\] Routing to Groq cloud\.\.\.'\);/g, "log.info('Routing to Groq cloud');");
-content = content.replace(/console\.log\('\[fallback\] Groq cloud responded successfully\.'\);/g, "log.info('Groq cloud responded successfully');");
-
-content = content.replace(/console\.error\(`\[\$\{requestId\}\] Error in \$\{context\}:`, err\);/g, "log.error('API Error', { requestId, context, error: err instanceof Error ? err.message : String(err) });");
-
-content = content.replace(/console\.log\(`\[startup\] Starting STT sidecar using command: \$\{pythonCmd\}\.\.\.\`\);/g, "log.info('Starting STT sidecar', { command: pythonCmd });");
-content = content.replace(/console\.error\(`\[stt\] Failed to start sidecar using '\$\{pythonCmd\}'\. Ensure python is installed and in your PATH\.\`\);/g, "log.error('Failed to start STT sidecar', { command: pythonCmd });");
-content = content.replace(/console\.error\(err\);/g, "log.error('Error', { error: err instanceof Error ? err.message : String(err) });");
-content = content.replace(/console\.log\('\[stt\]', d\.toString\(\)\.trim\(\)\)/g, "log.info('STT event', { event: d.toString().trim() })");
-content = content.replace(/console\.error\('\[stt\]', d\.toString\(\)\.trim\(\)\)/g, "log.error('STT event', { event: d.toString().trim() })");
-content = content.replace(/console\.error\(`\[stt\] Process exited with code \$\{code\}\. Restarting in 3s\.\.\.\`\);/g, "log.error('STT Process exited', { code });");
-
-content = content.replace(/console\.log\('\[startup\] STT sidecar is ready\.'\);/g, "log.info('STT sidecar is ready');");
-content = content.replace(/console\.log\(`\[startup\] Still waiting for STT sidecar \(downloading model\?\)\.\.\. \(\$\{Math\.round\(\(now - start\) \/ 1000\)\}s elapsed\)\`\);/g, "log.info('Still waiting for STT sidecar', { elapsedSecs: Math.round((now - start) / 1000) });");
-content = content.replace(/console\.warn\('\[startup\] STT sidecar did not become ready within timeout \(60m\)\. Audio features may be unavailable\.'\);/g, "log.warn('STT sidecar timeout');");
-
-content = content.replace(/console\.log\(`\[ocr\] Processing uploaded receipt: \$\{req\.file\.originalname\} \(\$\{req\.file\.size\} bytes\)\`\);/g, "log.info('Processing uploaded receipt', { originalname: req.file.originalname, size: req.file.size });");
-content = content.replace(/console\.log\(`\[ocr progress\] \$\{m\.status\}: \$\{Math\.round\(m\.progress \* 100\)\}%`\)/g, "log.info('OCR Progress', { status: m.status, progress: Math.round(m.progress * 100) })");
-content = content.replace(/console\.log\(`\[ocr\] Extracted text length: \$\{text\.length\}\`\);/g, "log.info('OCR Extracted text length', { length: text.length });");
-content = content.replace(/console\.log\(`\[ocr\] Progress: \$\{Math\.round\(m\.progress \* 100\)\}%`\);/g, "log.info('OCR Progress', { progress: Math.round(m.progress * 100) });");
-content = content.replace(/console\.log\(`\[ocr\] Extracted \$\{ocrText\.length\} chars with \$\{confidence\}% confidence`\);/g, "log.info('OCR Extracted chars', { length: ocrText.length, confidence });");
-content = content.replace(/console\.log\(`\[recurring\] Generating invoice from template \$\{templateInvoiceId\}\`\);/g, "log.info('Recurring schedule trigger', { templateInvoiceId });");
-content = content.replace(/console\.log\(`\[startup\] Loaded \$\{data\.length\} recurring schedules from Supabase\`\);/g, "log.info('Loaded recurring schedules', { count: data.length });");
-content = content.replace(/console\.log\(`\[recurring\] Generating invoice from template \$\{schedule\.template_invoice_id\}\`\);/g, "log.info('Recurring schedule trigger', { templateInvoiceId: schedule.template_invoice_id });");
-content = content.replace(/console\.warn\('\[email\] PDF generation failed, sending without attachment:', pdfErr\);/g, "log.warn('PDF generation failed', { error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) });");
-content = content.replace(/console\.error\(`\[\$\{requestId\}\] PDF generation timed out after \$\{PDF_TIMEOUT_MS\}ms`\);/g, "log.error('PDF generation timed out', { requestId, timeoutMs: PDF_TIMEOUT_MS });");
-
-// 2. LLM Timeout Replacements
-content = content.replace(
-  /llm\.chat\.completions\.create\(\{([\s\S]*?)\}\)/g,
-  (match, inner) => {
-    if (match.includes('signal: AbortSignal.timeout(LLM_TIMEOUT_MS)')) return match;
-    return `llm.chat.completions.create({${inner}}, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })`;
-  }
-);
-content = content.replace(
-  /groq\.chat\.completions\.create\(\{([\s\S]*?)\}\)/g,
-  (match, inner) => {
-    if (match.includes('signal: AbortSignal.timeout(LLM_TIMEOUT_MS)')) return match;
-    return `groq.chat.completions.create({${inner}}, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })`;
-  }
+// 1. Imports
+serverContent = serverContent.replace(
+  "import express from 'express';",
+  "import express from 'express';\nimport cookieParser from 'cookie-parser';"
 );
 
-// 3. User Auth Migration (Supabase)
+// 2. Middleware & CORS
+serverContent = serverContent.replace(
+  /  app\.use\(\n    cors\(\{\n      origin: \(origin, callback\) => \{[\s\S]*?\n      \},\n      methods:/g,
+  "  app.use(cookieParser());\n  app.use(\n    cors({\n      origin: (origin, callback) => {\n        const isAllowed = !origin || origin.startsWith('chrome-extension://') || allowedOrigins.includes(origin);\n        if (isAllowed) {\n          callback(null, true);\n        } else {\n          callback(new Error(`Origin ${origin} not allowed by CORS`));\n        }\n      },\n      credentials: true,\n      methods:"
+);
 
-// In server.ts, the "users" map is defined:
-// const users: Map<string, StoredUser> = new Map();
-// If we replace the auth routes, we don't need it. But let's leave it and just overwrite the routes.
+// 3. JWT Expiration
+serverContent = serverContent.replace(
+  "const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';",
+  "const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';"
+);
 
-const authRegisterRegex = /v1\.post\('\/auth\/register'[\s\S]*?handleApiError\(error, res, 'auth\/register'\);\s*\}\s*\}\);/;
-const newAuthRegister = `v1.post('/auth/register', authRateLimiter, async (req, res): Promise<void> => {
-    try {
-      const { email, password, name } = req.body;
+// 4. requireAuth
+serverContent = serverContent.replace(
+  "  let token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;",
+  "  let token = req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : null;\n  if (!token && req.cookies && req.cookies.accessToken) {\n    token = req.cookies.accessToken;\n  }"
+);
 
-      if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-        res.status(400).json({ error: 'Email and password are required.' });
-        return;
-      }
+// 5. /auth/register
+serverContent = serverContent.replace(
+  /      res\.status\(201\)\.json\(\{ user, \.\.\.tokens \}\);/g,
+  "      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });\n      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });\n      res.status(201).json({ user, ...tokens });"
+);
 
-      if (password.length < 8) {
-        res.status(400).json({ error: 'Password must be at least 8 characters.' });
-        return;
-      }
+// 6. /auth/login
+serverContent = serverContent.replace(
+  /      res\.json\(\{ user, \.\.\.tokens \}\);/g,
+  "      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });\n      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });\n      res.json({ user, ...tokens });"
+);
 
-      const userId = randomUUID();
-      const passwordHash = await bcrypt.hash(password, 12);
+// 7. /auth/refresh
+serverContent = serverContent.replace(
+  /      const \{ refreshToken \} = req\.body;/g,
+  "      const refreshToken = req.body.refreshToken || (req.cookies && req.cookies.refreshToken);"
+);
+serverContent = serverContent.replace(
+  /      res\.json\(tokens\);/g,
+  "      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });\n      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });\n      res.json(tokens);"
+);
 
-      if (supabaseAdmin) {
-        const { error } = await supabaseAdmin.from('users').insert({
-          id: userId,
-          email: email.toLowerCase().trim(),
-          password_hash: passwordHash,
-          name: name?.trim() || email.split('@')[0],
-          created_at: new Date().toISOString(),
-        });
+// 8. /sync/push logic for deletions
+serverContent = serverContent.replace(
+  "const { invoices } = req.body;",
+  "const { invoices, deletedInvoiceIds } = req.body;"
+);
+serverContent = serverContent.replace(
+  /      if \(\!Array\.isArray\(invoices\)\) {/g,
+  "      if (deletedInvoiceIds && deletedInvoiceIds.length > 0) {\n        for (const id of deletedInvoiceIds) {\n          await supabaseAdmin.from('invoices').delete().eq('id', id).eq('user_id', userId);\n        }\n      }\n      if (!Array.isArray(invoices)) {"
+);
 
-        if (error) {
-            if (error.code === '23505') {
-                res.status(409).json({ error: 'An account with this email already exists.' });
-            } else {
-                throw error;
-            }
-            return;
-        }
-      } else {
-        // Fallback for dev mode
-        users.set(userId, {
-          id: userId,
-          email: email.toLowerCase().trim(),
-          passwordHash,
-          name: name?.trim() || email.split('@')[0],
-          createdAt: new Date().toISOString(),
-        });
-      }
+// 9. CHROME_PATH update
+serverContent = serverContent.replace(
+  /    const CHROME_PATH = process\.env\.CHROME_PATH \?\? \([\s\S]*?    \);/g,
+  "    const CHROME_PATH = process.env.CHROME_PATH || (\n      process.platform === 'win32'\n        ? 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe'\n        : process.platform === 'darwin'\n        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'\n        : '/usr/bin/google-chrome-stable'\n    );"
+);
 
-      const tokens = generateTokens(userId);
-      res.status(201).json({
-        user: { id: userId, email: email.toLowerCase(), name: name || email.split('@')[0] },
-        ...tokens,
-      });
-    } catch (error) {
-      handleApiError(error, res, 'auth/register');
-    }
-  });`;
+// 10. PII Regex update
+serverContent = serverContent.replace(
+  /  sanitized = sanitized\.replace\(\/\(\?:\\\+\?\\d\{1,3\}\[-.\\s\]\?\)\?\\\(\?\\d\{2,4\}\\\)\?\[-.\\s\]\?\\d\{3,4\}\[-.\\s\]\?\\d\{3,4\}\/g, '\[PHONE_REDACTED\]'\);/g,
+  "  sanitized = sanitized.replace(/(?:phone|tel|mobile|cell|mob)[\\s:]*(?:\\+?\\d{1,3}[-.\\s]?)?\\(?\\d{2,4}\\)?[-.\\s]?\\d{3,4}[-.\\s]?\\d{3,4}/gi, '[PHONE_REDACTED]');"
+);
+serverContent = serverContent.replace(
+  /  sanitized = sanitized\.replace\(\/\\b\\d\{2,3\}\[-]\?\\d\{2,3\}\[-]\?\\d\{4\}\\b\/g, '\[TAXID_REDACTED\]'\);\n/g,
+  ""
+);
 
-content = content.replace(authRegisterRegex, newAuthRegister);
+// 11. Share Token Store replacement
+// In /invoices/:id/share:
+serverContent = serverContent.replace(
+  /      if \(supabaseAdmin\) \{[\s\S]*?      \} else \{[\s\S]*?      \}/g,
+  "      if (supabaseAdmin) {\n        await supabaseAdmin.from('share_tokens').insert({\n          invoice_id: invoiceId,\n          user_id: (req as any).userId,\n          token,\n          access_level: accessLevel,\n          expires_at: new Date(Date.now() + expiresInDays * 86400000).toISOString(),\n          is_active: true,\n          view_count: 0\n        });\n      }"
+);
 
-const authLoginRegex = /v1\.post\('\/auth\/login'[\s\S]*?handleApiError\(error, res, 'auth\/login'\);\s*\}\s*\}\);/;
-const newAuthLogin = `v1.post('/auth/login', authRateLimiter, async (req, res): Promise<void> => {
-    try {
-      const { email, password } = req.body;
+// In GET /shared/:token
+serverContent = serverContent.replace(
+  /      const shareData = shareTokenStore\.get\(token\);/g,
+  "      let shareData;\n      if (supabaseAdmin) {\n        const { data, error } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();\n        if (data) {\n          shareData = {\n            ...data,\n            isActive: data.is_active,\n            expiresAt: data.expires_at,\n            accessLevel: data.access_level,\n            viewCount: data.view_count,\n            invoice: {\n              id: data.invoices.id,\n              invoiceNumber: data.invoices.invoice_number,\n              title: data.invoices.title,\n              status: data.invoices.status,\n              currency: data.invoices.currency,\n              taxRate: parseFloat(data.invoices.tax_rate),\n              discountRate: parseFloat(data.invoices.discount_rate),\n              discountType: data.invoices.discount_type,\n              shipping: parseFloat(data.invoices.shipping),\n              issueDate: data.invoices.issue_date,\n              dueDate: data.invoices.due_date,\n              notes: data.invoices.notes,\n              templateId: data.invoices.template_id,\n              themeColor: data.invoices.theme_color,\n              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },\n              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },\n              displaySettings: data.invoices.display_settings,\n              items: (data.invoices.invoice_items || []).sort((a,b)=>a.sort_order-b.sort_order).map(i => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))\n            }\n          };\n        }\n      }"
+);
 
-      if (!email || !password) {
-        res.status(400).json({ error: 'Email and password are required.' });
-        return;
-      }
+// In POST /shared/:token/view
+serverContent = serverContent.replace(
+  /      const shareData = shareTokenStore\.get\(token\);\n      if \(shareData && shareData\.isActive\) \{\n        shareData\.viewCount = \(shareData\.viewCount \|\| 0\) \+ 1;\n        shareData\.lastViewedAt = new Date\(\)\.toISOString\(\);\n      \}/g,
+  "      if (supabaseAdmin) {\n        const { data } = await supabaseAdmin.from('share_tokens').select('view_count, is_active').eq('token', token).single();\n        if (data && data.is_active) {\n          await supabaseAdmin.from('share_tokens').update({ view_count: data.view_count + 1 }).eq('token', token);\n        }\n      }"
+);
 
-      let user;
-      if (supabaseAdmin) {
-        const { data, error } = await supabaseAdmin.from('users').select('*').eq('email', email.toLowerCase()).single();
-        if (error || !data) {
-          res.status(401).json({ error: 'Invalid email or password.' });
-          return;
-        }
-        user = {
-            id: data.id,
-            email: data.email,
-            passwordHash: data.password_hash,
-            name: data.name
-        };
-      } else {
-        user = Array.from(users.values()).find(u => u.email === email.toLowerCase());
-      }
+// In POST /shared/:token/pay
+serverContent = serverContent.replace(
+  /      const shareData = shareTokenStore\.get\(token\);/g,
+  "      let shareData;\n      if (supabaseAdmin) {\n        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*)').eq('token', token).single();\n        if (data) shareData = { isActive: data.is_active, invoice: { id: data.invoice_id } };\n      }"
+);
 
-      if (!user) {
-        res.status(401).json({ error: 'Invalid email or password.' });
-        return;
-      }
+// In GET /shared/:token/pdf
+serverContent = serverContent.replace(
+  /      const shareData = shareTokenStore\.get\(token\);/g,
+  "      let shareData;\n      if (supabaseAdmin) {\n        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();\n        if (data) {\n          shareData = {\n            isActive: data.is_active,\n            expiresAt: data.expires_at,\n            invoice: {\n              id: data.invoices.id,\n              invoiceNumber: data.invoices.invoice_number,\n              title: data.invoices.title,\n              status: data.invoices.status,\n              currency: data.invoices.currency,\n              taxRate: parseFloat(data.invoices.tax_rate),\n              discountRate: parseFloat(data.invoices.discount_rate),\n              discountType: data.invoices.discount_type,\n              shipping: parseFloat(data.invoices.shipping),\n              issueDate: data.invoices.issue_date,\n              dueDate: data.invoices.due_date,\n              notes: data.invoices.notes,\n              templateId: data.invoices.template_id,\n              themeColor: data.invoices.theme_color,\n              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },\n              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },\n              displaySettings: data.invoices.display_settings,\n              items: (data.invoices.invoice_items || []).sort((a,b)=>a.sort_order-b.sort_order).map(i => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))\n            }\n          };\n        }\n      }"
+);
 
-      const passwordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!passwordValid) {
-        res.status(401).json({ error: 'Invalid email or password.' });
-        return;
-      }
+// In POST /shared/:token/mark-paid
+serverContent = serverContent.replace(
+  /      const shareData = shareTokenStore\.get\(token\);/g,
+  "      let shareData;\n      if (supabaseAdmin) {\n        const { data } = await supabaseAdmin.from('share_tokens').select('*').eq('token', token).single();\n        if (data) shareData = { isActive: data.is_active };\n      }"
+);
+serverContent = serverContent.replace(
+  /      shareData\.markedPaidAt = new Date\(\)\.toISOString\(\);\n      shareData\.paymentStatus = 'paid';\n\n      res\.json\(\{/g,
+  "      res.json({"
+);
 
-      const tokens = generateTokens(user.id);
-      res.json({
-        user: { id: user.id, email: user.email, name: user.name },
-        ...tokens,
-      });
-    } catch (error) {
-      handleApiError(error, res, 'auth/login');
-    }
-  });`;
+fs.writeFileSync('d:/projects/invoice/server.ts', serverContent);
 
-content = content.replace(authLoginRegex, newAuthLogin);
+// Fix apiClient.ts
+let apiContent = fs.readFileSync('d:/projects/invoice/src/lib/apiClient.ts', 'utf8');
 
-const authRefreshRegex = /v1\.post\('\/auth\/refresh'[\s\S]*?handleApiError\(error, res, 'auth\/refresh'\);\s*\}\s*\}\);/;
-const newAuthRefresh = `v1.post('/auth/refresh', authRateLimiter, async (req, res): Promise<void> => {
-    try {
-      const { refreshToken } = req.body;
+apiContent = apiContent.replace(
+  "  const { accessToken, refreshToken, updateTokens, clearAuth } = useStore.getState();",
+  "  const { updateTokens, clearAuth } = useStore.getState();"
+);
+apiContent = apiContent.replace(
+  "  if (accessToken && !headers.has('Authorization')) {\n    headers.set('Authorization', `Bearer ${accessToken}`);\n  }",
+  ""
+);
+apiContent = apiContent.replace(
+  "  const config = {\n    ...options,\n    headers,\n  };",
+  "  const config: RequestInit = {\n    ...options,\n    headers,\n    credentials: 'include',\n  };"
+);
+apiContent = apiContent.replace(
+  /        body: JSON\.stringify\(\{ refreshToken \}\),/g,
+  "        body: JSON.stringify({}),\n        credentials: 'include',"
+);
 
-      if (!refreshToken || typeof refreshToken !== 'string') {
-        res.status(400).json({ error: 'Refresh token is required.' });
-        return;
-      }
+fs.writeFileSync('d:/projects/invoice/src/lib/apiClient.ts', apiContent);
 
-      const payload = verifyToken(refreshToken, 'refresh');
-      if (!payload) {
-        res.status(401).json({ error: 'Invalid or expired refresh token.' });
-        return;
-      }
-
-      let exists = false;
-      if (supabaseAdmin) {
-        const { data } = await supabaseAdmin.from('users').select('id').eq('id', payload.sub).single();
-        exists = !!data;
-      } else {
-        exists = users.has(payload.sub);
-      }
-
-      if (!exists) {
-        res.status(401).json({ error: 'User no longer exists.' });
-        return;
-      }
-
-      const tokens = generateTokens(payload.sub);
-      res.json(tokens);
-    } catch (error) {
-      handleApiError(error, res, 'auth/refresh');
-    }
-  });`;
-
-content = content.replace(authRefreshRegex, newAuthRefresh);
-
-const authMeRegex = /v1\.get\('\/auth\/me'[\s\S]*?res\.json\(\{ id: user\.id, email: user\.email, name: user\.name \}\);\s*\}\);/;
-const newAuthMe = `v1.get('/auth/me', requireAuth, async (req, res): Promise<void> => {
-    const userId = (req as any).userId;
-
-    let user;
-    if (supabaseAdmin) {
-      const { data } = await supabaseAdmin.from('users').select('*').eq('id', userId).single();
-      if (data) user = data;
-    } else {
-      user = users.get(userId);
-    }
-
-    if (!user) {
-      res.json({ id: userId, email: 'dev@local', name: 'Dev User' });
-      return;
-    }
-
-    res.json({ id: user.id, email: user.email, name: user.name });
-  });`;
-
-content = content.replace(authMeRegex, newAuthMe);
-
-fs.writeFileSync('server.ts', content);
+console.log('Fixed server.ts and apiClient.ts');
