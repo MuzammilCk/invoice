@@ -12,7 +12,18 @@ import asyncio
 import logging
 import threading
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s][stt] %(message)s")
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "ts": self.formatTime(record),
+            "level": record.levelname,
+            "msg": record.getMessage(),
+        })
+
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
+logging.root.handlers = [handler]
+logging.root.setLevel(logging.INFO)
 
 # Windows asyncio fix
 if sys.platform == 'win32':

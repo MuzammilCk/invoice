@@ -22,10 +22,29 @@ import { computeInvoiceTotals } from './src/lib/calculations';
 
 dotenv.config();
 
+// ── Issue 1: Structured JSON Logging ──
+const log = {
+    info: (msg: string, meta?: object) =>
+        console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', msg, ...meta })),
+    warn: (msg: string, meta?: object) =>
+        console.warn(JSON.stringify({ ts: new Date().toISOString(), level: 'warn', msg, ...meta })),
+    error: (msg: string, meta?: object) =>
+        console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', msg, ...meta })),
+};
+
+// ── Issue 9: VITE_ Prefix Guard ──
+const LEAKED_KEYS = ['VITE_SUPABASE_SERVICE_ROLE_KEY', 'VITE_JWT_SECRET', 'VITE_API_SECRET'];
+for (const key of LEAKED_KEYS) {
+    if (process.env[key]) {
+        log.error('Leaked VITE variable', { key });
+        process.exit(1);
+    }
+}
+
 // ── Issue 1.1: Dynamic PORT from environment ──
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
-  console.error(`FATAL: Invalid PORT value: "${process.env.PORT}"`);
+  log.error('Invalid PORT value', { port: process.env.PORT });
   process.exit(1);
 }
 
@@ -33,6 +52,7 @@ if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
 const LLM_HOST = process.env.LLM_HOST ?? process.env.OLLAMA_HOST ?? 'http://127.0.0.1:8000';
 const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen3-8b';
 const LLM_API_KEY = process.env.LLM_API_KEY ?? 'local-no-key-needed';
+const LLM_TIMEOUT_MS = 60_000;
 const STT_PORT = process.env.STT_PORT ?? '5050';
 const STT_URL = `http://127.0.0.1:${STT_PORT}`;
 const STT_HEALTH_URL = `http://127.0.0.1:${parseInt(STT_PORT) + 1}`;
@@ -50,14 +70,14 @@ const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? createClient
 }) : null;
 
 if (!SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV !== 'test') {
-  console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY not set. Backend sync endpoints will fail.');
+  log.warn('SUPABASE_SERVICE_ROLE_KEY not set');
 }
 
 // ── Issue 7.1: API authentication ──
 const API_SECRET = process.env.API_SECRET;
 if (!API_SECRET) {
   if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL: API_SECRET environment variable must be set in production to secure AI endpoints.');
+    log.error('API_SECRET not set in production');
     process.exit(1);
   }
   // In development, we intentionally omit the warning to keep logs clean
@@ -69,7 +89,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET must be set in production.');
+  log.error('JWT_SECRET not set in production');
   process.exit(1);
 }
 
@@ -94,7 +114,7 @@ if (process.env.NODE_ENV !== 'production') {
     name: 'Dev Admin',
     createdAt: new Date().toISOString(),
   });
-  console.log(`[auth] Dev user seeded: admin@invoicestudio.local / admin123`);
+  log.info('Dev user seeded', { email: 'admin@invoicestudio.local' });
 }
 
 // ── JWT Token Helpers ──
@@ -213,12 +233,12 @@ async function withRetry<T>(
           maxRetries,
           originalError: err,
         };
-        console.error(`[retry] Final failure: ${typedError.message}`);
+        log.error('Retry final failure', { message: typedError.message });
         throw typedError;
       }
 
       const delay = baseDelayMs * 2 ** attempt;
-      console.warn(`[retry] [${category}] Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      log.warn('Retrying request', { category, delay, attempt: attempt + 1, maxRetries });
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -235,21 +255,21 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
         messages,
         response_format: responseFormat,
         temperature: 0.1,
-      }),
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) }),
       2, // Fewer retries before fallback
       500
     );
     return response.choices[0]?.message?.content ?? '';
   } catch (llmErr: any) {
     const category = classifyLLMError(llmErr);
-    console.warn(`[fallback] LLM failed (${category}). Checking cloud fallback...`);
+    log.warn('LLM failed, checking cloud fallback', { category });
 
     // ── Try cloud fallback if configured ──
     const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const GROQ_MODEL = process.env.GROQ_MODEL ?? 'llama-3.1-8b-instant';
 
     if (GROQ_API_KEY && ['CONNECTION_REFUSED', 'MODEL_NOT_LOADED', 'SERVICE_UNAVAILABLE'].includes(category)) {
-      console.log('[fallback] Routing to Groq cloud...');
+      log.info('Routing to Groq cloud');
 
       const groq = new OpenAI({
         baseURL: 'https://api.groq.com/openai/v1',
@@ -261,11 +281,11 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
         messages,
         response_format: { type: 'json_object' },
         temperature: 0.1,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       const content = response.choices[0]?.message?.content ?? '';
       if (content) {
-        console.log('[fallback] Groq cloud responded successfully.');
+        log.info('Groq cloud responded successfully');
         return content;
       }
     }
@@ -303,7 +323,7 @@ function stripPIIFromPrompt(prompt: string): string {
 // ── Issue 5.4: Centralized error handler ──
 function handleApiError(err: unknown, res: express.Response, context: string) {
   const requestId = (res.getHeader('X-Request-Id') as string) ?? 'unknown';
-  console.error(`[${requestId}] Error in ${context}:`, err);
+  log.error('API Error', { requestId, context, error: err instanceof Error ? err.message : String(err) });
 
   if (process.env.NODE_ENV === 'development') {
     res.status(500).json({
@@ -544,7 +564,7 @@ async function startServer() {
 
   async function startSTTSidecar(): Promise<void> {
     const pythonCmd = process.env.PYTHON_CMD || (process.platform === 'win32' ? 'python' : 'python3');
-    console.log(`[startup] Starting STT sidecar using command: ${pythonCmd}...`);
+    log.info('Starting STT sidecar', { command: pythonCmd });
     
     sttProcess = spawn(pythonCmd, ['stt_server.py'], {
       stdio: ['ignore', 'pipe', 'inherit'],
@@ -558,14 +578,14 @@ async function startServer() {
     });
 
     sttProcess.on('error', (err) => {
-      console.error(`[stt] Failed to start sidecar using '${pythonCmd}'. Ensure python is installed and in your PATH.`);
-      console.error(err);
+      log.error('Failed to start STT sidecar', { command: pythonCmd });
+      log.error('Error', { error: err instanceof Error ? err.message : String(err) });
     });
 
-    sttProcess.stdout?.on('data', (d) => console.log('[stt]', d.toString().trim()));
-    sttProcess.stderr?.on('data', (d) => console.error('[stt]', d.toString().trim()));
+    sttProcess.stdout?.on('data', (d) => log.info('STT event', { event: d.toString().trim() }));
+    sttProcess.stderr?.on('data', (d) => log.error('STT event', { event: d.toString().trim() }));
     sttProcess.on('exit', (code) => {
-      console.error(`[stt] Process exited with code ${code}. Restarting in 3s...`);
+      log.error('STT Process exited', { code });
       setTimeout(startSTTSidecar, 3000);
     });
 
@@ -578,20 +598,20 @@ async function startServer() {
       try {
         const res = await fetch(`${STT_HEALTH_URL}/health`);
         if (res.ok) {
-          console.log('[startup] STT sidecar is ready.');
+          log.info('STT sidecar is ready');
           return;
         }
       } catch {}
       
       const now = Date.now();
       if (now - lastLogTime > 30_000) {
-        console.log(`[startup] Still waiting for STT sidecar (downloading model?)... (${Math.round((now - start) / 1000)}s elapsed)`);
+        log.info('Still waiting for STT sidecar', { elapsedSecs: Math.round((now - start) / 1000) });
         lastLogTime = now;
       }
       
       await new Promise((r) => setTimeout(r, 1000));
     }
-    console.warn('[startup] STT sidecar did not become ready within timeout (60m). Audio features may be unavailable.');
+    log.warn('STT sidecar timeout');
   }
 
   await startSTTSidecar();
@@ -773,23 +793,36 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      // Check duplicate email
-      const existing = Array.from(users.values()).find(u => u.email === email.toLowerCase());
-      if (existing) {
-        res.status(409).json({ error: 'An account with this email already exists.' });
-        return;
-      }
-
       const userId = randomUUID();
       const passwordHash = await bcrypt.hash(password, 12);
 
-      users.set(userId, {
-        id: userId,
-        email: email.toLowerCase().trim(),
-        passwordHash,
-        name: name?.trim() || email.split('@')[0],
-        createdAt: new Date().toISOString(),
-      });
+      if (supabaseAdmin) {
+        const { error } = await supabaseAdmin.from('users').insert({
+          id: userId,
+          email: email.toLowerCase().trim(),
+          password_hash: passwordHash,
+          name: name?.trim() || email.split('@')[0],
+          created_at: new Date().toISOString(),
+        });
+
+        if (error) {
+            if (error.code === '23505') {
+                res.status(409).json({ error: 'An account with this email already exists.' });
+            } else {
+                throw error;
+            }
+            return;
+        }
+      } else {
+        // Fallback for dev mode
+        users.set(userId, {
+          id: userId,
+          email: email.toLowerCase().trim(),
+          passwordHash,
+          name: name?.trim() || email.split('@')[0],
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       const tokens = generateTokens(userId);
       res.status(201).json({
@@ -810,7 +843,23 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      const user = Array.from(users.values()).find(u => u.email === email.toLowerCase());
+      let user;
+      if (supabaseAdmin) {
+        const { data, error } = await supabaseAdmin.from('users').select('*').eq('email', email.toLowerCase()).single();
+        if (error || !data) {
+          res.status(401).json({ error: 'Invalid email or password.' });
+          return;
+        }
+        user = {
+            id: data.id,
+            email: data.email,
+            passwordHash: data.password_hash,
+            name: data.name
+        };
+      } else {
+        user = Array.from(users.values()).find(u => u.email === email.toLowerCase());
+      }
+
       if (!user) {
         res.status(401).json({ error: 'Invalid email or password.' });
         return;
@@ -847,13 +896,20 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      const user = users.get(payload.sub);
-      if (!user) {
+      let exists = false;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('users').select('id').eq('id', payload.sub).single();
+        exists = !!data;
+      } else {
+        exists = users.has(payload.sub);
+      }
+
+      if (!exists) {
         res.status(401).json({ error: 'User no longer exists.' });
         return;
       }
 
-      const tokens = generateTokens(user.id);
+      const tokens = generateTokens(payload.sub);
       res.json(tokens);
     } catch (error) {
       handleApiError(error, res, 'auth/refresh');
@@ -862,7 +918,14 @@ EXPANDED FIELD RULES:
 
   v1.get('/auth/me', requireAuth, async (req, res): Promise<void> => {
     const userId = (req as any).userId;
-    const user = users.get(userId);
+
+    let user;
+    if (supabaseAdmin) {
+      const { data } = await supabaseAdmin.from('users').select('*').eq('id', userId).single();
+      if (data) user = data;
+    } else {
+      user = users.get(userId);
+    }
 
     if (!user) {
       res.json({ id: userId, email: 'dev@local', name: 'Dev User' });
@@ -1179,7 +1242,7 @@ EXPANDED FIELD RULES:
           }));
           await page.close();
         } catch (pdfErr) {
-          console.warn('[email] PDF generation failed, sending without attachment:', pdfErr);
+          log.warn('PDF generation failed', { error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) });
         }
       }
 
@@ -1219,10 +1282,10 @@ EXPANDED FIELD RULES:
         res.json({ sent: true, to, method: 'smtp' });
       } else {
         // Dev mode: log email details
-        console.log(`\n📧 [dev-email] To: ${to}`);
-        console.log(`📧 [dev-email] Subject: ${subject}`);
-        console.log(`📧 [dev-email] Body: ${(body || '').substring(0, 200)}...`);
-        console.log(`📧 [dev-email] PDF attached: ${!!pdfBuffer} (${pdfBuffer ? pdfBuffer.length : 0} bytes)\n`);
+        log.info('Dev email To', { to });
+        log.info('Dev email Subject', { subject });
+        log.info('Dev email Body', { bodyPreview: (body || '').substring(0, 200) });
+        log.info('Dev email PDF', { attached: !!pdfBuffer, bytes: pdfBuffer ? pdfBuffer.length : 0 });
 
         res.json({
           sent: true,
@@ -1370,7 +1433,7 @@ EXPANDED FIELD RULES:
 
       // Create the cron job
       const task = cron.schedule(cronExpr, () => {
-        console.log(`[recurring] Generating invoice from template ${templateInvoiceId}`);
+        log.info('Recurring schedule trigger', { templateInvoiceId });
         // In production: clone invoice, update dates, optionally auto-send
       });
 
@@ -1434,10 +1497,10 @@ EXPANDED FIELD RULES:
     supabaseAdmin.from('recurring_schedules').select('*').eq('is_active', true)
       .then(({ data, error }) => {
         if (!error && data) {
-          console.log(`[startup] Loaded ${data.length} recurring schedules from Supabase`);
+          log.info('Loaded recurring schedules', { count: data.length });
           data.forEach(schedule => {
             const task = cron.schedule(schedule.cron_expression, () => {
-              console.log(`[recurring] Generating invoice from template ${schedule.template_invoice_id}`);
+              log.info('Recurring schedule trigger', { templateInvoiceId: schedule.template_invoice_id });
             });
             activeSchedules.set(schedule.id, task);
           });
@@ -1488,7 +1551,7 @@ EXPANDED FIELD RULES:
         } as any,
         temperature: 0.1,
         stream: true,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       let fullContent = '';
       let chunkCount = 0;
@@ -1558,7 +1621,7 @@ EXPANDED FIELD RULES:
             json_schema: { name: 'invoice', schema: invoiceSchema },
           } as any,
           temperature: 0.1,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1621,7 +1684,7 @@ RULES:
             { role: 'user', content: analysisPrompt },
           ],
           temperature: 0.3,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1650,16 +1713,16 @@ RULES:
         return;
       }
 
-      console.log(`[ocr] Processing uploaded receipt: ${req.file.originalname} (${req.file.size} bytes)`);
+      log.info('Processing uploaded receipt', { originalname: req.file.originalname, size: req.file.size });
       const tesseract = await import('tesseract.js');
       
       const { data: { text } } = await tesseract.recognize(
         req.file.buffer,
         'eng',
-        { logger: m => console.log(`[ocr progress] ${m.status}: ${Math.round(m.progress * 100)}%`) }
+        { logger: m => log.info('OCR Progress', { status: m.status, progress: Math.round(m.progress * 100) }) }
       );
 
-      console.log(`[ocr] Extracted text length: ${text.length}`);
+      log.info('OCR Extracted text length', { length: text.length });
       res.json({ text: text.trim() });
     } catch (error) {
       handleApiError(error, res, 'ocr-receipt');
@@ -1704,7 +1767,7 @@ RULES:
         } as any,
         temperature: 0.1,
         stream: true,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       let fullContent = '';
       let chunkCount = 0;
@@ -1766,13 +1829,13 @@ RULES:
         {
           logger: (m: any) => {
             if (m.status === 'recognizing text') {
-              console.log(`[ocr] Progress: ${Math.round(m.progress * 100)}%`);
+              log.info('OCR Progress', { progress: Math.round(m.progress * 100) });
             }
           },
         }
       );
 
-      console.log(`[ocr] Extracted ${ocrText.length} chars with ${confidence}% confidence`);
+      log.info('OCR Extracted chars', { length: ocrText.length, confidence });
 
       if (!ocrText.trim()) {
         res.status(400).json({ error: 'No text could be extracted from the image.' });
@@ -1808,7 +1871,7 @@ INSTRUCTIONS:
             json_schema: { name: 'invoice', schema: invoiceSchema },
           } as any,
           temperature: 0.1,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1879,7 +1942,7 @@ RULES:
             { role: 'user', content: prompt },
           ],
           temperature: 0.4,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const emailText = response.choices[0]?.message?.content ?? '';
@@ -1959,7 +2022,7 @@ RULES:
 
     } catch (error: any) {
       if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
-        console.error(`[${requestId}] PDF generation timed out after ${PDF_TIMEOUT_MS}ms`);
+        log.error('PDF generation timed out', { requestId, timeoutMs: PDF_TIMEOUT_MS });
         res.status(504).json({ error: 'PDF generation timed out. Please try again.' });
       } else {
         handleApiError(error, res, 'pdf-generation');
@@ -1994,7 +2057,7 @@ RULES:
             { role: 'user', content: prompt },
           ],
           temperature: 0.3,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       res.json({ text: response.choices[0]?.message?.content ?? '' });
@@ -2103,8 +2166,8 @@ RULES:
       shareData.invoice.status = 'paid';
       
       // Attempt to update the original invoice in Supabase if exists
-      if (supabase) {
-        await supabase
+      if (supabaseAdmin) {
+        await supabaseAdmin
           .from('invoices')
           .update({ status: 'paid', updated_at: new Date().toISOString() })
           .eq('id', shareData.invoice.id);
@@ -2362,7 +2425,7 @@ RULES:
     const sidecarWs = new WsClient(`ws://127.0.0.1:${STT_PORT}`);
 
     sidecarWs.on('open', () => {
-      console.log('[ws/stt] Sidecar connection established');
+      log.info('Sidecar connection established');
     });
 
     let handshakeSent = false;
@@ -2454,7 +2517,7 @@ RULES:
     });
 
     browserWs.on('close', (code, reason) => {
-      console.log(`[ws/stt] Browser disconnected (${code})`);
+      log.info('Browser disconnected', { code });
       if (sidecarWs.readyState === WsClient.OPEN) {
         sidecarWs.close();
       }
@@ -2468,42 +2531,42 @@ RULES:
 
     browserWs.on('error', (err) => console.error('[ws/stt] Browser WS error:', err));
     sidecarWs.on('error', (err) => {
-      console.error('[ws/stt] Sidecar WS error:', err);
+      log.error('Sidecar WS error', { error: err.message });
       browserWs.close(1011, 'Sidecar error');
     });
   });
 
   const server = httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[startup] Server running on http://localhost:${PORT}`);
-    console.log(`[startup] WebSocket STT endpoint: ws://localhost:${PORT}/ws/stt`);
-    console.log(`[startup] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[startup] API auth: ${API_SECRET ? 'ENABLED' : 'DISABLED (no API_SECRET set)'}`);
-    console.log(`[startup] LLM: ${LLM_MODEL} via ${LLM_HOST}`);
-    console.log(`[startup] STT Sidecar: http://localhost:${STT_PORT}`);
+    log.info('Server running', { port: PORT });
+    log.info('WebSocket STT endpoint', { port: PORT });
+    log.info('Environment', { env: process.env.NODE_ENV || 'development' });
+    log.info('API auth', { enabled: !!API_SECRET });
+    log.info('LLM Config', { model: LLM_MODEL, host: LLM_HOST });
+    log.info('STT Sidecar configured', { port: STT_PORT });
   });
 
   const shutdown = (signal: string) => {
-    console.log(`[shutdown] Received ${signal}. Graceful shutdown...`);
+    log.info('Graceful shutdown initiated', { signal });
     // Kill STT sidecar
     if (sttProcess) {
       sttProcess.removeAllListeners('exit'); // Prevent auto-restart
       sttProcess.kill('SIGTERM');
-      console.log('[shutdown] STT sidecar terminated.');
+      log.info('STT sidecar terminated');
     }
     // Close Puppeteer browser instance
     if (browserInstance) {
       browserInstance.close().catch(() => {});
-      console.log('[shutdown] Puppeteer browser closed.');
+      log.info('Puppeteer browser closed');
     }
     if (server) {
       server.close(() => {
-        console.log('[shutdown] HTTP server closed.');
-        wss.close(() => console.log('[shutdown] WebSocket server closed.'));
+        log.info('HTTP server closed');
+        wss.close(() => log.info('WebSocket server closed'));
         process.exit(0);
       });
     } else {
       setTimeout(() => {
-        console.error('[shutdown] Forced exit after timeout.');
+        log.error('Forced exit after timeout');
         process.exit(1);
       }, 10_000);
     }

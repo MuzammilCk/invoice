@@ -19,6 +19,7 @@ CREATE TYPE recurring_frequency AS ENUM ('weekly', 'biweekly', 'monthly', 'quart
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
   name TEXT NOT NULL DEFAULT '',
   business_name TEXT DEFAULT '',
   business_address TEXT DEFAULT '',

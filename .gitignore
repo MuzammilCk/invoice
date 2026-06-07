@@ -8,3 +8,6 @@ coverage/
 !.env.example
 models/
 invoice-qwen2.5-1.5b-q8_0/
+__pycache__/
+*.pyc
+*.pyo
