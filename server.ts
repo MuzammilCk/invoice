@@ -17,6 +17,7 @@ import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import bcrypt from 'bcryptjs';
 import puppeteer, { Browser } from 'puppeteer';
 import cron from 'node-cron';
+import cronParser from 'cron-parser';
 import { createClient } from '@supabase/supabase-js';
 import { buildClientContext, formatClientContextForPrompt } from './src/lib/ai-context';
 import { computeInvoiceTotals } from './src/lib/calculations';
@@ -1510,12 +1511,15 @@ EXPANDED FIELD RULES:
   });
 
   function getNextCronRun(expression: string): string {
-    const now = new Date();
-    now.setHours(9, 0, 0, 0);
-    if (now < new Date()) {
-      now.setDate(now.getDate() + 1);
+    try {
+      return cronParser.parse(expression).next().toDate().toISOString();
+    } catch (err) {
+      log.error('Failed to parse cron expression', { expression, error: err instanceof Error ? err.message : String(err) });
+      const fallback = new Date();
+      fallback.setHours(9, 0, 0, 0);
+      if (fallback < new Date()) fallback.setDate(fallback.getDate() + 1);
+      return fallback.toISOString();
     }
-    return now.toISOString();
   }
 
   // ── Load active schedules from Supabase on startup ──
@@ -2485,9 +2489,28 @@ RULES:
   const httpServer = createHttpServer(app);
 
   // ── WebSocket STT Proxy ──
+  const MAX_WS_CONNECTIONS = 50;
+  let activeWsConnections = 0;
+  const userWsSessions = new Map<string, number>();
+  const MAX_PER_USER_SESSIONS = 2;
+  const WS_PING_INTERVAL = 25_000;
+
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/stt' });
 
   wss.on('connection', (browserWs, req) => {
+    let isAlive = true;
+    browserWs.on('pong', () => { isAlive = true; });
+    const pingTimer = setInterval(() => {
+        if (!isAlive) { browserWs.terminate(); return; }
+        isAlive = false;
+        browserWs.ping();
+    }, WS_PING_INTERVAL);
+
+    if (activeWsConnections >= MAX_WS_CONNECTIONS) {
+        browserWs.close(1013, 'Server capacity reached');
+        return;
+    }
+
     // ── Auth: verify JWT from query param ?token=<accessToken> ──
     const url = new URL(req.url!, `http://localhost:${PORT}`);
     const token = url.searchParams.get('token');
@@ -2496,6 +2519,8 @@ RULES:
     const isDevMode = process.env.NODE_ENV !== 'production'
       && !process.env.JWT_SECRET
       && !API_SECRET;
+
+    let userId = 'anonymous';
 
     if (!isDevMode) {
       if (!token) {
@@ -2507,8 +2532,20 @@ RULES:
         browserWs.close(4003, 'Invalid or expired token');
         return;
       }
-      console.log(`[ws/stt] Authenticated session for user ${payload.sub}`);
+      userId = payload.sub;
+      console.log(`[ws/stt] Authenticated session for user ${userId}`);
+    } else {
+      userId = 'dev-user';
     }
+
+    const current = userWsSessions.get(userId) ?? 0;
+    if (current >= MAX_PER_USER_SESSIONS) {
+        browserWs.close(4029, 'Session limit reached');
+        return;
+    }
+
+    activeWsConnections++;
+    userWsSessions.set(userId, current + 1);
 
     // ── Proxy: open connection to Python sidecar ──
     const sidecarWs = new WsClient(`ws://127.0.0.1:${STT_PORT}`);
@@ -2606,7 +2643,13 @@ RULES:
     });
 
     browserWs.on('close', (code, reason) => {
-      log.info('Browser disconnected', { code });
+      clearInterval(pingTimer);
+      activeWsConnections--;
+      const n = userWsSessions.get(userId) ?? 1;
+      if (n <= 1) userWsSessions.delete(userId);
+      else userWsSessions.set(userId, n - 1);
+
+      log.info('Browser disconnected', { code, activeConnections: activeWsConnections });
       if (sidecarWs.readyState === WsClient.OPEN) {
         sidecarWs.close();
       }

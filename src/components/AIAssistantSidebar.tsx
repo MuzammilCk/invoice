@@ -58,6 +58,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const audioChunksRef = useRef<Blob[]>([]);
   const speechRecognitionRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const autoStopTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   React.useEffect(() => {
     return () => {
@@ -197,6 +198,15 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       setDetectedLanguage('');
       setError('');
 
+      const MAX_RECORDING_MS = 4 * 60 * 1000;
+      autoStopTimerRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+          setError('Maximum recording duration reached. Processing your audio...');
+        }
+      }, MAX_RECORDING_MS);
+
       const { accessToken } = useStore.getState();
       const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
@@ -205,6 +215,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       ws.binaryType = 'arraybuffer';
 
       let sttReady = false;
+      let whisperLiveHasData = false;
 
       ws.onopen = () => {
         console.log('[ws/stt] Connected — waiting for STT server ready signal');
@@ -225,6 +236,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
           }
           
           if (msg.type === 'partial') {
+            whisperLiveHasData = true;
             setTranscript(msg.text);
           } else if (msg.type === 'final') {
             setTranscript(msg.text);
@@ -281,11 +293,13 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
         recognition.interimResults = true;
         recognition.lang = '';
         recognition.onresult = (event: any) => {
-          let interim = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            interim += event.results[i][0].transcript;
+          if (!whisperLiveHasData) {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              interim += event.results[i][0].transcript;
+            }
+            setTranscript(interim);
           }
-          setTranscript(interim);
         };
         speechRecognitionRef.current = recognition;
         recognition.start();
@@ -303,7 +317,8 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
