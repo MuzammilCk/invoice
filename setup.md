@@ -52,7 +52,22 @@ The application features a real-time, low-latency Speech-to-Text engine powered 
    - **`av` (PyAV)**: Used for high-performance, in-memory audio decoding without needing to save to disk or fork `ffmpeg` subprocesses.
    - **`numpy`**: Required for raw audio manipulation and processing.
 
-## 4. Environment Variables (`.env`)
+## 4. Local LLM Setup (Ollama)
+
+We use Ollama to serve the custom fine-tuned model (`invoice-qwen2.5-1.5b-q8_0`).
+
+1. Install Ollama from [ollama.com](https://ollama.com/download/windows).
+2. Open a terminal in the `invoice-qwen2.5-1.5b-q8_0` directory.
+3. Build the custom model into Ollama using the provided Modelfile:
+   ```bash
+   ollama create invoice-qwen2.5-1.5b-q8_0 -f Modelfile
+   ```
+4. Verify the model is available:
+   ```bash
+   ollama list
+   ```
+
+## 5. Environment Variables (`.env`)
 
 Create a `.env` file in the root directory. Below are the required and recommended configurations:
 
@@ -66,10 +81,10 @@ VITE_SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 JWT_SECRET=your_jwt_secret
 
-# ── LLM Config (Backend Agnostic) ──
-LLM_HOST=http://127.0.0.1:8000
-LLM_MODEL=qwen3-8b
-LLM_API_KEY=local-no-key-needed
+# ── LLM Config (Ollama) ──
+LLM_HOST=http://127.0.0.1:11434
+LLM_MODEL=invoice-qwen2.5-1.5b-q8_0
+LLM_API_KEY=not-needed-for-local
 
 # ── STT Sidecar Config ──
 STT_PORT=5050
@@ -77,7 +92,7 @@ WHISPER_MODEL=D:/invoice/models/large-v3-turbo
 STT_COMPUTE_TYPE=int8
 ```
 
-## 5. Running the Application
+## 6. Running the Application
 
 For a development environment with hot-reloading:
 
