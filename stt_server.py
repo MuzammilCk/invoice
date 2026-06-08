@@ -52,18 +52,7 @@ def run_whisperlive():
         port=PORT,
         backend="faster_whisper",
         faster_whisper_custom_model_path=MODEL_PATH,
-        device=DEVICE,
-        compute_type=COMPUTE,
-        # VAD configuration
-        vad_parameters={
-            "onset": 0.5,         # VAD sensitivity (0-1, lower = more sensitive)
-            "min_speech_duration_ms": 250,
-            "min_silence_duration_ms": 600,  # pause length to end a segment
-        },
-        language=None,            # auto-detect
-        task="transcribe",
         max_connection_time=300,  # 5-minute max session
-        no_voice_activity_chunks=10,  # send final after 10 silent chunks
     )
 
 def monitor_thread():
