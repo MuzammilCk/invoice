@@ -47,11 +47,15 @@ def run_whisperlive():
       - Pushing partial + final results back to the client
     """
     server = TranscriptionServer()
+    # Whisper-live 0.9.0 requires custom paths to have a '/' or be an existing local folder.
+    # For standard models (e.g. 'large-v3-turbo'), we pass None and let the client request it.
+    custom_model_path = MODEL_PATH if ("/" in MODEL_PATH or os.path.exists(MODEL_PATH)) else None
+
     server.run(
         host="0.0.0.0",
         port=PORT,
         backend="faster_whisper",
-        faster_whisper_custom_model_path=MODEL_PATH,
+        faster_whisper_custom_model_path=custom_model_path,
         max_connection_time=300,  # 5-minute max session
     )
 

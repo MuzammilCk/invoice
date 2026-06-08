@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { OpenAI } from 'openai';
@@ -349,23 +350,89 @@ const __dirname = path.dirname(__filename);
 // ── Puppeteer Browser Pool (singleton) ──
 let browserInstance: Browser | null = null;
 
+// ── Browser Detection: Finds first available Chromium-based browser ──
+// Supports Chrome, Brave, and Edge on Windows/macOS/Linux.
+// Override via CHROME_PATH env var in .env
+function detectBrowser(): string {
+    if (process.env.CHROME_PATH) {
+        if (!fs.existsSync(process.env.CHROME_PATH)) {
+            log.warn('CHROME_PATH set but file not found', { path: process.env.CHROME_PATH });
+        }
+        return process.env.CHROME_PATH;
+    }
+
+    if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA ?? '';
+        const userProfile  = process.env.USERPROFILE  ?? '';
+
+        const candidates = [
+            // Chrome — system-wide
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            // Chrome — per-user
+            `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
+            `${userProfile}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
+            // Brave — system-wide
+            'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            // Brave — per-user (most common on managed corporate laptops)
+            `${localAppData}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+            `${userProfile}\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+            // Edge (Chromium) — always present on Windows 10/11
+            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            `${localAppData}\\Microsoft\\Edge\\Application\\msedge.exe`,
+        ];
+
+        const found = candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } });
+
+        if (!found) {
+            log.warn(
+                'No Chromium browser found. Install Chrome, Brave, or Edge, ' +
+                'or set CHROME_PATH in .env. PDF generation will fail.'
+            );
+            return candidates[0]!; // Return first path; Puppeteer will throw a clear error
+        }
+
+        log.info('Browser detected', { path: found });
+        return found;
+    }
+
+    if (process.platform === 'darwin') {
+        const macCandidates = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        ];
+        return macCandidates.find(p => fs.existsSync(p)) ?? macCandidates[0]!;
+    }
+
+    // Linux
+    const linuxCandidates = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/brave-browser',
+        '/usr/bin/brave-browser-stable',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/snap/bin/chromium',
+    ];
+    return linuxCandidates.find(p => fs.existsSync(p)) ?? linuxCandidates[0]!;
+}
+
+const BROWSER_PATH = detectBrowser();
+
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
-    const CHROME_PATH = process.env.CHROME_PATH || (
-      process.platform === 'win32'
-        ? 'C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe'
-        : process.platform === 'darwin'
-        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-        : '/usr/bin/google-chrome-stable'
-    );
     browserInstance = await puppeteer.launch({
       headless: true,
-      executablePath: CHROME_PATH,
+      executablePath: BROWSER_PATH,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-gpu',
         '--disable-dev-shm-usage',
+        '--disable-brave-extension',     // disable Brave Shields in headless
+        '--disable-brave-rewards-extension',
+        '--disable-gpu',
         '--font-render-hinting=none',
       ],
     });
@@ -645,7 +712,7 @@ async function startServer() {
           scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
           fontSrc: ["'self'", 'fonts.gstatic.com'],
-          imgSrc: ["'self'", 'data:', 'blob:'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
           connectSrc: [
             "'self'",
             "ws://localhost:24678",
@@ -714,7 +781,7 @@ async function startServer() {
 
   const authRateLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 5, // 5 auth attempts per minute per IP
+    max: 50, // 50 auth attempts per minute per IP
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many authentication attempts. Please wait.' },
@@ -820,10 +887,13 @@ EXPANDED FIELD RULES:
         });
 
         if (error) {
+            log.error('Supabase user insert error', { code: error.code, message: error.message, details: error.details });
             if (error.code === '23505') {
                 res.status(409).json({ error: 'An account with this email already exists.' });
+            } else if (error.code === 'PGRST204') {
+                res.status(500).json({ error: 'Database schema mismatch. Please add password_hash column to the users table.' });
             } else {
-                throw error;
+                res.status(500).json({ error: `Database error: ${error.message}` });
             }
             return;
         }
@@ -878,6 +948,11 @@ EXPANDED FIELD RULES:
 
       if (!user) {
         res.status(401).json({ error: 'Invalid email or password.' });
+        return;
+      }
+
+      if (!user.passwordHash) {
+        res.status(500).json({ error: 'User account has no password set (database schema issue or auth misconfiguration).' });
         return;
       }
 
@@ -1031,8 +1106,19 @@ EXPANDED FIELD RULES:
       }
       
       res.json({ success: true, syncedCount: invoices.length });
-    } catch (error) {
-      handleApiError(error, res, 'sync/push');
+    } catch (err: any) {
+      log.error('Sync push failed', {
+        message: err?.message,
+        code: err?.code,       // Postgres error code (e.g. '22P02' for invalid enum)
+        detail: err?.detail,   // Postgres detail string
+      });
+      res.status(500).json({
+        error: 'Sync failed',
+        detail: process.env.NODE_ENV !== 'production'
+            ? (err?.detail || err?.message || String(err))
+            : 'Internal server error',
+        code: err?.code,
+      });
     }
   });
 
