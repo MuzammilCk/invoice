@@ -19,7 +19,7 @@ export function Dashboard() {
   const [isRecording, setIsRecording] = useState(false);
   const ocrFileInputRef = React.useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingStage, setStreamingStage] = useState<'idle' | 'generating' | 'parsing'>('idle');
@@ -222,24 +222,6 @@ export function Dashboard() {
           }
         }
         setStreamingStage('idle');
-
-      } else if (aiMode === 'voice' && audioBlob) {
-        // B-10: Voice mode — just start transcription (review handled separately)
-        setVoiceStage('transcribing');
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'voice.webm');
-        const res = await apiClient('/api/v1/transcribe-audio', { method: 'POST', body: formData });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({ error: 'Transcription failed' }));
-          throw new Error(errData.error || 'Transcription failed');
-        }
-        const { transcript: sttTranscript, language, confidence } = await res.json();
-        setTranscript(sttTranscript);
-        setDetectedLanguage(language);
-        setTranscriptConfidence(confidence);
-        setVoiceStage('transcript-review');
-        setIsGenerating(false);
-        return; // Wait for user to review transcript before generating
       }
 
       if (generatedData) {
@@ -347,7 +329,6 @@ export function Dashboard() {
     setIsAICreateOpen(false);
     setPrompt('');
     setTranscript('');
-    setAudioBlob(null);
     navigate(`/editor/${newInvoice.id}`);
   };
 
@@ -355,23 +336,76 @@ export function Dashboard() {
     if (isRecording) {
       mediaRecorderRef.current?.stop();
       setIsRecording(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        const chunks: BlobPart[] = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          setAudioBlob(blob);
-          stream.getTracks().forEach(track => track.stop());
-        };
-        mediaRecorder.start();
-        setIsRecording(true);
-      } catch (err) {
-        alert("Microphone access denied or unavailable.");
-      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Ensure Opus encoding for optimal Whisper processing
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+        
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      
+      // Setup WebSocket
+      const { accessToken } = useStore.getState();
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.binaryType = 'arraybuffer';
+
+      let sttReady = false;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          
+          if (msg.type === 'stt_ready') {
+            if (!sttReady) {
+              sttReady = true;
+              mediaRecorder.start(250); // 250ms chunks for real-time VAD
+              setIsRecording(true);
+              setVoiceStage('recording');
+            }
+          } else if (msg.type === 'partial') {
+            setTranscript(msg.text); // Real-time UI feedback
+          } else if (msg.type === 'final') {
+            setTranscript(msg.text);
+            setDetectedLanguage(msg.language || 'en');
+            setTranscriptConfidence(msg.confidence || 0);
+            setVoiceStage('transcript-review');
+          }
+        } catch (err) {
+          // Ignore non-JSON binary heartbeat frames
+        }
+      };
+
+      ws.onerror = () => {
+        setError('WebSocket connection to STT failed.');
+        setVoiceStage('idle');
+        setIsRecording(false);
+      };
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+          event.data.arrayBuffer().then(buf => ws.send(buf));
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ eof: 1 }));
+        }
+        setVoiceStage('transcribing');
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+    } catch (err) {
+      setError('Microphone access denied or unavailable.');
     }
   };
 
@@ -632,8 +666,6 @@ export function Dashboard() {
                              <p className="text-[#bf953f] font-bold flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Transcribing with Whisper...</p>
                            ) : isRecording ? (
                              <p className="text-red-400 font-bold animate-pulse flex items-center gap-2"><span className="w-2 h-2 bg-red-500"></span> Recording in progress...</p>
-                           ) : audioBlob ? (
-                             <p className="text-emerald-400 font-bold">Audio recorded. Ready to process.</p>
                            ) : (
                              <p className="text-[#a09e91]">Tap to start recording</p>
                            )}
@@ -662,10 +694,10 @@ export function Dashboard() {
                </div>
                
                {/* Actions — only show when not in transcript review mode */}
-               {voiceStage !== 'transcript-review' && (
+               {(voiceStage !== 'transcript-review' && aiMode !== 'voice') && (
                  <div className="flex justify-end gap-3 relative z-10">
                    <button 
-                     disabled={isGenerating || (aiMode === 'text' ? !prompt : !audioBlob)} 
+                     disabled={isGenerating || (aiMode === 'text' ? !prompt : false)} 
                      onClick={handleCreateAI} 
                      className={`px-8 py-3 text-[#0f1115] font-serif font-black italic tracking-wider flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-[#bf953f] to-[#aa771c] hover:from-[#fcf6ba] hover:to-[#bf953f] shadow-[0_0_20px_rgba(191,149,63,0.3)]`}
                    >

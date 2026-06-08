@@ -2636,32 +2636,32 @@ RULES:
     // ── Proxy: open connection to Python sidecar ──
     const sidecarWs = new WsClient(`ws://127.0.0.1:${STT_PORT}`);
 
+    const sessionUid = randomUUID();
+
     sidecarWs.on('open', () => {
       log.info('Sidecar connection established');
+      sidecarWs.send(JSON.stringify({
+        uid: sessionUid,
+        language: null,        // auto-detect
+        task: 'transcribe',
+        model: 'large-v3-turbo',
+        use_vad: true,
+      }));
     });
-
-    let handshakeSent = false;
-    const sessionUid = randomUUID();
 
     browserWs.on('message', (data, isBinary) => {
       if (sidecarWs.readyState !== WsClient.OPEN) return;
       
-      // WhisperLive requires a JSON handshake as the FIRST message
-      // before it will accept binary audio frames
-      if (!handshakeSent) {
-        handshakeSent = true;
-        sidecarWs.send(JSON.stringify({
-          uid: sessionUid,
-          language: null,        // auto-detect
-          task: 'transcribe',
-          model: 'large-v3-turbo',
-          use_vad: true,
-        }));
-      }
-      
       // Forward audio chunks (binary)
       if (isBinary) {
         sidecarWs.send(data, { binary: true });
+      } else {
+        try {
+          const parsed = JSON.parse(data.toString());
+          if (parsed.eof) {
+            sidecarWs.send(JSON.stringify({ eof: 1 }));
+          }
+        } catch {}
       }
     });
 

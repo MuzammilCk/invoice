@@ -279,7 +279,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
           speechRecognitionRef.current = null;
         }
         if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1000, 'Recording stopped');
+          ws.send(JSON.stringify({ eof: 1 }));
         }
         setVoiceStage('transcribing');
         setIsGenerating(true);
