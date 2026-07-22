@@ -1,11 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, FileText, Bot } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FileText, Bot, LogIn } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useStore } from '../store/useStore';
 
 export function SidebarNav() {
-  const { businessInfo, authUser } = useStore();
+  const { businessInfo, authUser, isAuthenticated } = useStore();
 
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -49,9 +49,19 @@ export function SidebarNav() {
         <button className="p-3 text-zinc-500 hover:text-[#bf953f] transition-colors">
           <Bot className="w-6 h-6 stroke-[1.5]" />
         </button>
-        <div className="w-8 h-8 rounded-full bg-[#15171c] flex items-center justify-center text-xs font-serif font-black italic gold-gradient-text gold-border historical-shadow" title={displayName}>
-          {initials}
-        </div>
+        {isAuthenticated ? (
+          <div className="w-8 h-8 rounded-full bg-[#15171c] flex items-center justify-center text-xs font-serif font-black italic gold-gradient-text gold-border historical-shadow" title={displayName}>
+            {initials}
+          </div>
+        ) : (
+          <NavLink 
+            to="/login"
+            className="p-3 text-zinc-500 hover:text-[#bf953f] transition-colors"
+            title="Sign In to Sync"
+          >
+            <LogIn className="w-6 h-6 stroke-[1.5]" />
+          </NavLink>
+        )}
       </div>
     </aside>
   );

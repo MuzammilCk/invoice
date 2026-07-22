@@ -74,17 +74,19 @@ export default function App() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/shared/:token" element={<SharedInvoicePage />} />
         
-        {/* Protected routes — auth required */}
-        <Route path="/" element={
-          <AuthGuard>
-            <Layout />
-          </AuthGuard>
-        }>
+        {/* Core routes — local-first (no auth required) */}
+        <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="editor/:id" element={<Editor />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="templates" element={<TemplatesPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          
+          {/* Protected routes — auth required */}
+          <Route path="settings" element={
+            <AuthGuard>
+              <SettingsPage />
+            </AuthGuard>
+          } />
         </Route>
       </Routes>
     </BrowserRouter>

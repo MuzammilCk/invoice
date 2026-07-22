@@ -53,7 +53,7 @@ if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
 
 // ── LLM Configuration (backend-agnostic: vLLM, llama.cpp, Ollama, etc.) ──
 const LLM_HOST = process.env.LLM_HOST ?? process.env.OLLAMA_HOST ?? 'http://127.0.0.1:8000';
-const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen3-8b';
+const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'invoice-qwen2.5-1.5b-q8_0:latest';
 const LLM_API_KEY = process.env.LLM_API_KEY ?? 'local-no-key-needed';
 const LLM_TIMEOUT_MS = 60_000;
 const STT_PORT = process.env.STT_PORT ?? '5050';
@@ -1327,8 +1327,8 @@ EXPANDED FIELD RULES:
     });
   });
 
-  // Apply auth to all subsequent routes
-  v1.use(requireAuth);
+  // Remove blanket auth to enable guest mode
+  // v1.use(requireAuth);
 
   // ── M-01: Email Sending via Nodemailer ──
   v1.post('/invoices/:id/send-email', requireAuth, async (req, res): Promise<void> => {
@@ -1413,7 +1413,7 @@ EXPANDED FIELD RULES:
   });
 
   // ── M-03: Proactive Invoice Suggestions ──
-  v1.post('/invoices/:id/suggestions', requireAuth, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/suggestions', async (req, res): Promise<void> => {
     try {
       const { invoice } = req.body;
       if (!invoice) {
@@ -1625,7 +1625,7 @@ EXPANDED FIELD RULES:
   }
 
   // ── Route: AI Invoice Generation with Server-Sent Events ──
-  v1.post('/generate-invoice-stream', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/generate-invoice-stream', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { prompt, clientContext } = req.body;
       if (!prompt || typeof prompt !== 'string') {
@@ -1753,7 +1753,7 @@ EXPANDED FIELD RULES:
     }
   });
   // ── Route: Proactive Invoice Analysis ──
-  v1.post('/invoices/:id/analyze', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/analyze', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const invoice = req.body.invoice;
 
@@ -1822,7 +1822,7 @@ RULES:
 
 
   // ── M-02: Route: Extract Text from Receipt via OCR (Tesseract.js) ──
-  v1.post('/ocr-receipt', requireAuth, aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
+  v1.post('/ocr-receipt', aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
     try {
       if (!req.file) {
         res.status(400).json({ error: 'No receipt image uploaded.' });
@@ -1846,7 +1846,7 @@ RULES:
   });
 
   // ── B-06: Route: Text-to-Invoice from Reviewed Transcript (Stage 2, SSE) ──
-  v1.post('/text-to-invoice-from-transcript', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/text-to-invoice-from-transcript', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { transcript, invoiceContext } = req.body;
       if (!transcript || typeof transcript !== 'string') {
@@ -1922,7 +1922,7 @@ RULES:
 
 
   // ── Route: OCR Import (Image → Invoice Data) ──
-  v1.post('/ocr-import', requireAuth, aiRateLimiter, upload.single('image'), async (req, res): Promise<void> => {
+  v1.post('/ocr-import', aiRateLimiter, upload.single('image'), async (req, res): Promise<void> => {
     try {
       const imageFile = req.file;
 
@@ -2012,7 +2012,7 @@ INSTRUCTIONS:
   });
 
   // ── Route: Generate Email Draft ──
-  v1.post('/invoices/:id/draft-email', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/draft-email', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { invoice, emailType = 'send' } = req.body;
 
@@ -2646,6 +2646,8 @@ RULES:
         task: 'transcribe',
         model: 'large-v3-turbo',
         use_vad: true,
+        audio_format: 'int16',
+        sample_rate: 16000
       }));
     });
 
@@ -2736,7 +2738,7 @@ RULES:
       else userWsSessions.set(userId, n - 1);
 
       log.info('Browser disconnected', { code, activeConnections: activeWsConnections });
-      if (sidecarWs.readyState === WsClient.OPEN) {
+      if (sidecarWs.readyState !== WsClient.CLOSED) {
         sidecarWs.close();
       }
     });
@@ -2749,8 +2751,14 @@ RULES:
 
     browserWs.on('error', (err) => console.error('[ws/stt] Browser WS error:', err));
     sidecarWs.on('error', (err) => {
-      log.error('Sidecar WS error', { error: err.message });
-      browserWs.close(1011, 'Sidecar error');
+      log.error('Sidecar WS error', err);
+      if (browserWs.readyState === WsClient.OPEN) {
+        browserWs.send(JSON.stringify({
+          type: 'error',
+          code: 'SIDECAR_FAILURE',
+          message: 'Speech recognition service unavailable'
+        }));
+      }
     });
   });
 

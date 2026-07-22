@@ -6,6 +6,16 @@
   --font-serif: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
+:root {
+  --color-obsidian-950: #07080a;
+  --color-obsidian-900: #0c0e12;
+  --color-obsidian-800: #12151c;
+  --color-obsidian-700: #1a1f29;
+  --color-accent-indigo: #6366f1;
+  --color-accent-cyan: #06b6d4;
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+}
+
 /* Da Vinci Textures & Styles */
 .bg-texture-canvas {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
@@ -24,8 +34,20 @@
 }
 
 .sketched-border {
-  border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-panel {
+  background: rgba(18, 21, 28, 0.7);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+}
+
+table, .line-item, .invoice-field {
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
 }
 
 .historical-shadow {

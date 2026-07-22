@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { AIAssistantSidebar } from '../components/AIAssistantSidebar';
 import { EditableInvoice } from '../components/EditableInvoice';
 import { SyncIndicator } from '../components/SyncIndicator';
@@ -59,7 +59,16 @@ function Dropdown({ options, value, onChange, placeholder }: { options: {value: 
 export function Editor() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { invoices, updateInvoice, undo, redo, history } = useStore();
+  const { invoices, updateInvoice, undo, redo, history, isAuthenticated } = useStore();
+  const location = useLocation();
+
+  const handleAuthwall = (action: () => void) => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
+    action();
+  };
   const printRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(0.8);
   
@@ -86,6 +95,10 @@ export function Editor() {
   };
 
   const handlePrint = async () => {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
     if (isGeneratingPDF) return;
     setIsGeneratingPDF(true);
     setPdfProgress('Validating invoice...');
@@ -184,14 +197,14 @@ export function Editor() {
                 </button>
               </div>
               <button
-                onClick={() => setIsAuditLogOpen(true)}
+                onClick={() => handleAuthwall(() => setIsAuditLogOpen(true))}
                 className="p-2 text-[#a09e91] hover:text-[#bf953f] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a] rounded-lg transition-colors border border-transparent hover:border-[#bf953f]/30"
                 title="Audit Log"
               >
                 <Shield className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setIsRecurringModalOpen(true)}
+                onClick={() => handleAuthwall(() => setIsRecurringModalOpen(true))}
                 className="p-2 text-[#a09e91] hover:text-[#bf953f] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a] rounded-lg transition-colors border border-transparent hover:border-[#bf953f]/30"
                 title="Recurring Billing"
               >
@@ -201,7 +214,7 @@ export function Editor() {
 
             {/* Always visible Primary Tools */}
             <button
-              onClick={() => setIsEmailModalOpen(true)}
+              onClick={() => handleAuthwall(() => setIsEmailModalOpen(true))}
               className="inline-flex items-center justify-center gap-2 p-2 sm:px-4 sm:py-2 text-xs font-serif font-bold italic text-[#bf953f] bg-[#bf953f]/10 border border-[#bf953f]/30 rounded-lg hover:bg-[#bf953f]/20 hover:text-[#fcf6ba] transition-colors"
               title="Email"
             >
@@ -247,14 +260,14 @@ export function Editor() {
                       </button>
                     </div>
                     <button 
-                      onClick={() => { setIsAuditLogOpen(true); setIsMoreMenuOpen(false); }}
+                      onClick={() => handleAuthwall(() => { setIsAuditLogOpen(true); setIsMoreMenuOpen(false); })}
                       className="w-full text-left px-4 py-3 text-sm font-serif italic text-[#a09e91] hover:bg-[#1a1a1a] hover:text-[#fcf6ba] flex items-center gap-3 transition-colors"
                     >
                       <Shield className="w-4 h-4 text-[#bf953f]" />
                       Audit Log
                     </button>
                     <button 
-                      onClick={() => { setIsRecurringModalOpen(true); setIsMoreMenuOpen(false); }}
+                      onClick={() => handleAuthwall(() => { setIsRecurringModalOpen(true); setIsMoreMenuOpen(false); })}
                       className="w-full text-left px-4 py-3 text-sm font-serif italic text-[#a09e91] hover:bg-[#1a1a1a] hover:text-[#fcf6ba] flex items-center gap-3 transition-colors"
                     >
                       <CalendarClock className="w-4 h-4 text-[#bf953f]" />
