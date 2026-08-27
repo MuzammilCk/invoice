@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { OpenAI } from 'openai';
@@ -7,6 +8,7 @@ import { fileURLToPath } from 'url';
 import multer from 'multer';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { spawn, ChildProcess } from 'child_process';
@@ -16,23 +18,44 @@ import { WebSocketServer, WebSocket as WsClient } from 'ws';
 import bcrypt from 'bcryptjs';
 import puppeteer, { Browser } from 'puppeteer';
 import cron from 'node-cron';
+import cronParser from 'cron-parser';
 import { createClient } from '@supabase/supabase-js';
 import { buildClientContext, formatClientContextForPrompt } from './src/lib/ai-context';
 import { computeInvoiceTotals } from './src/lib/calculations';
 
 dotenv.config();
 
+// ── Issue 1: Structured JSON Logging ──
+const log = {
+    info: (msg: string, meta?: object) =>
+        console.log(JSON.stringify({ ts: new Date().toISOString(), level: 'info', msg, ...meta })),
+    warn: (msg: string, meta?: object) =>
+        console.warn(JSON.stringify({ ts: new Date().toISOString(), level: 'warn', msg, ...meta })),
+    error: (msg: string, meta?: object) =>
+        console.error(JSON.stringify({ ts: new Date().toISOString(), level: 'error', msg, ...meta })),
+};
+
+// ── Issue 9: VITE_ Prefix Guard ──
+const LEAKED_KEYS = ['VITE_SUPABASE_SERVICE_ROLE_KEY', 'VITE_JWT_SECRET', 'VITE_API_SECRET'];
+for (const key of LEAKED_KEYS) {
+    if (process.env[key]) {
+        log.error('Leaked VITE variable', { key });
+        process.exit(1);
+    }
+}
+
 // ── Issue 1.1: Dynamic PORT from environment ──
 const PORT = parseInt(process.env.PORT ?? '3000', 10);
 if (isNaN(PORT) || PORT < 1 || PORT > 65535) {
-  console.error(`FATAL: Invalid PORT value: "${process.env.PORT}"`);
+  log.error('Invalid PORT value', { port: process.env.PORT });
   process.exit(1);
 }
 
 // ── LLM Configuration (backend-agnostic: vLLM, llama.cpp, Ollama, etc.) ──
 const LLM_HOST = process.env.LLM_HOST ?? process.env.OLLAMA_HOST ?? 'http://127.0.0.1:8000';
-const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'qwen3-8b';
+const LLM_MODEL = process.env.LLM_MODEL ?? process.env.OLLAMA_MODEL ?? 'invoice-qwen2.5-1.5b-q8_0:latest';
 const LLM_API_KEY = process.env.LLM_API_KEY ?? 'local-no-key-needed';
+const LLM_TIMEOUT_MS = 60_000;
 const STT_PORT = process.env.STT_PORT ?? '5050';
 const STT_URL = `http://127.0.0.1:${STT_PORT}`;
 const STT_HEALTH_URL = `http://127.0.0.1:${parseInt(STT_PORT) + 1}`;
@@ -50,14 +73,14 @@ const supabaseAdmin = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) ? createClient
 }) : null;
 
 if (!SUPABASE_SERVICE_ROLE_KEY && process.env.NODE_ENV !== 'test') {
-  console.warn('[supabase] SUPABASE_SERVICE_ROLE_KEY not set. Backend sync endpoints will fail.');
+  log.warn('SUPABASE_SERVICE_ROLE_KEY not set');
 }
 
 // ── Issue 7.1: API authentication ──
 const API_SECRET = process.env.API_SECRET;
 if (!API_SECRET) {
   if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL: API_SECRET environment variable must be set in production to secure AI endpoints.');
+    log.error('API_SECRET not set in production');
     process.exit(1);
   }
   // In development, we intentionally omit the warning to keep logs clean
@@ -65,11 +88,11 @@ if (!API_SECRET) {
 
 // ── JWT Configuration ──
 const JWT_SECRET = process.env.JWT_SECRET ?? (process.env.NODE_ENV === 'production' ? '' : 'dev-secret-do-not-use-in-production');
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET must be set in production.');
+  log.error('JWT_SECRET not set in production');
   process.exit(1);
 }
 
@@ -94,7 +117,7 @@ if (process.env.NODE_ENV !== 'production') {
     name: 'Dev Admin',
     createdAt: new Date().toISOString(),
   });
-  console.log(`[auth] Dev user seeded: admin@invoicestudio.local / admin123`);
+  log.info('Dev user seeded', { email: 'admin@invoicestudio.local' });
 }
 
 // ── JWT Token Helpers ──
@@ -122,10 +145,14 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
     return next();
   }
 
-  // Strategy 1: Bearer token (JWT)
+  // Strategy 1: Bearer token (JWT) or Cookie
   const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
+  let token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token && req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
+  }
+  
+  if (token) {
     const payload = verifyToken(token, 'access');
     if (payload) {
       (req as any).userId = payload.sub;
@@ -213,12 +240,12 @@ async function withRetry<T>(
           maxRetries,
           originalError: err,
         };
-        console.error(`[retry] Final failure: ${typedError.message}`);
+        log.error('Retry final failure', { message: typedError.message });
         throw typedError;
       }
 
       const delay = baseDelayMs * 2 ** attempt;
-      console.warn(`[retry] [${category}] Retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      log.warn('Retrying request', { category, delay, attempt: attempt + 1, maxRetries });
       await new Promise((r) => setTimeout(r, delay));
     }
   }
@@ -235,21 +262,21 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
         messages,
         response_format: responseFormat,
         temperature: 0.1,
-      }),
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) }),
       2, // Fewer retries before fallback
       500
     );
     return response.choices[0]?.message?.content ?? '';
   } catch (llmErr: any) {
     const category = classifyLLMError(llmErr);
-    console.warn(`[fallback] LLM failed (${category}). Checking cloud fallback...`);
+    log.warn('LLM failed, checking cloud fallback', { category });
 
     // ── Try cloud fallback if configured ──
     const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const GROQ_MODEL = process.env.GROQ_MODEL ?? 'llama-3.1-8b-instant';
 
     if (GROQ_API_KEY && ['CONNECTION_REFUSED', 'MODEL_NOT_LOADED', 'SERVICE_UNAVAILABLE'].includes(category)) {
-      console.log('[fallback] Routing to Groq cloud...');
+      log.info('Routing to Groq cloud');
 
       const groq = new OpenAI({
         baseURL: 'https://api.groq.com/openai/v1',
@@ -261,11 +288,11 @@ async function callWithFallback(messages: any[], responseFormat: any): Promise<s
         messages,
         response_format: { type: 'json_object' },
         temperature: 0.1,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       const content = response.choices[0]?.message?.content ?? '';
       if (content) {
-        console.log('[fallback] Groq cloud responded successfully.');
+        log.info('Groq cloud responded successfully');
         return content;
       }
     }
@@ -290,10 +317,9 @@ function stripPIIFromPrompt(prompt: string): string {
   sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL_REDACTED]');
 
   // Strip phone numbers (international formats)
-  sanitized = sanitized.replace(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/g, '[PHONE_REDACTED]');
+  sanitized = sanitized.replace(/(?:phone|tel|mobile|cell|mob)[\s:]*(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/gi, '[PHONE_REDACTED]');
 
   // Strip common tax ID patterns (SSN, EIN, PAN, GST, etc.)
-  sanitized = sanitized.replace(/\b\d{2,3}[-]?\d{2,3}[-]?\d{4}\b/g, '[TAXID_REDACTED]');
   sanitized = sanitized.replace(/\b[A-Z]{5}\d{4}[A-Z]\b/g, '[PAN_REDACTED]');
   sanitized = sanitized.replace(/\b\d{2}[A-Z]{5}\d{4}[A-Z]\d[A-Z0-9]{2}\b/g, '[GST_REDACTED]');
 
@@ -303,7 +329,7 @@ function stripPIIFromPrompt(prompt: string): string {
 // ── Issue 5.4: Centralized error handler ──
 function handleApiError(err: unknown, res: express.Response, context: string) {
   const requestId = (res.getHeader('X-Request-Id') as string) ?? 'unknown';
-  console.error(`[${requestId}] Error in ${context}:`, err);
+  log.error('API Error', { requestId, context, error: err instanceof Error ? err.message : String(err) });
 
   if (process.env.NODE_ENV === 'development') {
     res.status(500).json({
@@ -324,16 +350,89 @@ const __dirname = path.dirname(__filename);
 // ── Puppeteer Browser Pool (singleton) ──
 let browserInstance: Browser | null = null;
 
+// ── Browser Detection: Finds first available Chromium-based browser ──
+// Supports Chrome, Brave, and Edge on Windows/macOS/Linux.
+// Override via CHROME_PATH env var in .env
+function detectBrowser(): string {
+    if (process.env.CHROME_PATH) {
+        if (!fs.existsSync(process.env.CHROME_PATH)) {
+            log.warn('CHROME_PATH set but file not found', { path: process.env.CHROME_PATH });
+        }
+        return process.env.CHROME_PATH;
+    }
+
+    if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA ?? '';
+        const userProfile  = process.env.USERPROFILE  ?? '';
+
+        const candidates = [
+            // Chrome — system-wide
+            'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+            'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+            // Chrome — per-user
+            `${localAppData}\\Google\\Chrome\\Application\\chrome.exe`,
+            `${userProfile}\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe`,
+            // Brave — system-wide
+            'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            // Brave — per-user (most common on managed corporate laptops)
+            `${localAppData}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+            `${userProfile}\\AppData\\Local\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`,
+            // Edge (Chromium) — always present on Windows 10/11
+            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            `${localAppData}\\Microsoft\\Edge\\Application\\msedge.exe`,
+        ];
+
+        const found = candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } });
+
+        if (!found) {
+            log.warn(
+                'No Chromium browser found. Install Chrome, Brave, or Edge, ' +
+                'or set CHROME_PATH in .env. PDF generation will fail.'
+            );
+            return candidates[0]!; // Return first path; Puppeteer will throw a clear error
+        }
+
+        log.info('Browser detected', { path: found });
+        return found;
+    }
+
+    if (process.platform === 'darwin') {
+        const macCandidates = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+        ];
+        return macCandidates.find(p => fs.existsSync(p)) ?? macCandidates[0]!;
+    }
+
+    // Linux
+    const linuxCandidates = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/brave-browser',
+        '/usr/bin/brave-browser-stable',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/snap/bin/chromium',
+    ];
+    return linuxCandidates.find(p => fs.existsSync(p)) ?? linuxCandidates[0]!;
+}
+
+const BROWSER_PATH = detectBrowser();
+
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
     browserInstance = await puppeteer.launch({
       headless: true,
-      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      executablePath: BROWSER_PATH,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-gpu',
         '--disable-dev-shm-usage',
+        '--disable-brave-extension',     // disable Brave Shields in headless
+        '--disable-brave-rewards-extension',
+        '--disable-gpu',
         '--font-render-hinting=none',
       ],
     });
@@ -544,7 +643,7 @@ async function startServer() {
 
   async function startSTTSidecar(): Promise<void> {
     const pythonCmd = process.env.PYTHON_CMD || (process.platform === 'win32' ? 'python' : 'python3');
-    console.log(`[startup] Starting STT sidecar using command: ${pythonCmd}...`);
+    log.info('Starting STT sidecar', { command: pythonCmd });
     
     sttProcess = spawn(pythonCmd, ['stt_server.py'], {
       stdio: ['ignore', 'pipe', 'inherit'],
@@ -558,14 +657,14 @@ async function startServer() {
     });
 
     sttProcess.on('error', (err) => {
-      console.error(`[stt] Failed to start sidecar using '${pythonCmd}'. Ensure python is installed and in your PATH.`);
-      console.error(err);
+      log.error('Failed to start STT sidecar', { command: pythonCmd });
+      log.error('Error', { error: err instanceof Error ? err.message : String(err) });
     });
 
-    sttProcess.stdout?.on('data', (d) => console.log('[stt]', d.toString().trim()));
-    sttProcess.stderr?.on('data', (d) => console.error('[stt]', d.toString().trim()));
+    sttProcess.stdout?.on('data', (d) => log.info('STT event', { event: d.toString().trim() }));
+    sttProcess.stderr?.on('data', (d) => log.error('STT event', { event: d.toString().trim() }));
     sttProcess.on('exit', (code) => {
-      console.error(`[stt] Process exited with code ${code}. Restarting in 3s...`);
+      log.error('STT Process exited', { code });
       setTimeout(startSTTSidecar, 3000);
     });
 
@@ -578,20 +677,20 @@ async function startServer() {
       try {
         const res = await fetch(`${STT_HEALTH_URL}/health`);
         if (res.ok) {
-          console.log('[startup] STT sidecar is ready.');
+          log.info('STT sidecar is ready');
           return;
         }
       } catch {}
       
       const now = Date.now();
       if (now - lastLogTime > 30_000) {
-        console.log(`[startup] Still waiting for STT sidecar (downloading model?)... (${Math.round((now - start) / 1000)}s elapsed)`);
+        log.info('Still waiting for STT sidecar', { elapsedSecs: Math.round((now - start) / 1000) });
         lastLogTime = now;
       }
       
       await new Promise((r) => setTimeout(r, 1000));
     }
-    console.warn('[startup] STT sidecar did not become ready within timeout (60m). Audio features may be unavailable.');
+    log.warn('STT sidecar timeout');
   }
 
   await startSTTSidecar();
@@ -613,7 +712,7 @@ async function startServer() {
           scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
           fontSrc: ["'self'", 'fonts.gstatic.com'],
-          imgSrc: ["'self'", 'data:', 'blob:'],
+          imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
           connectSrc: [
             "'self'",
             "ws://localhost:24678",
@@ -630,6 +729,7 @@ async function startServer() {
 
   // ── Issue 1.6: CORS configuration with regex support ──
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? `http://localhost:${PORT}`).split(',').map(o => o.trim());
+  app.use(cookieParser());
   app.use(
     cors({
       origin: (origin, callback) => {
@@ -651,6 +751,7 @@ async function startServer() {
           callback(new Error(`Origin ${origin} not allowed by CORS`));
         }
       },
+      credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'DELETE'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Request-Id'],
       maxAge: 600,
@@ -680,7 +781,7 @@ async function startServer() {
 
   const authRateLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 5, // 5 auth attempts per minute per IP
+    max: 50, // 50 auth attempts per minute per IP
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many authentication attempts. Please wait.' },
@@ -773,25 +874,43 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      // Check duplicate email
-      const existing = Array.from(users.values()).find(u => u.email === email.toLowerCase());
-      if (existing) {
-        res.status(409).json({ error: 'An account with this email already exists.' });
-        return;
-      }
-
       const userId = randomUUID();
       const passwordHash = await bcrypt.hash(password, 12);
 
-      users.set(userId, {
-        id: userId,
-        email: email.toLowerCase().trim(),
-        passwordHash,
-        name: name?.trim() || email.split('@')[0],
-        createdAt: new Date().toISOString(),
-      });
+      if (supabaseAdmin) {
+        const { error } = await supabaseAdmin.from('users').insert({
+          id: userId,
+          email: email.toLowerCase().trim(),
+          password_hash: passwordHash,
+          name: name?.trim() || email.split('@')[0],
+          created_at: new Date().toISOString(),
+        });
+
+        if (error) {
+            log.error('Supabase user insert error', { code: error.code, message: error.message, details: error.details });
+            if (error.code === '23505') {
+                res.status(409).json({ error: 'An account with this email already exists.' });
+            } else if (error.code === 'PGRST204') {
+                res.status(500).json({ error: 'Database schema mismatch. Please add password_hash column to the users table.' });
+            } else {
+                res.status(500).json({ error: `Database error: ${error.message}` });
+            }
+            return;
+        }
+      } else {
+        // Fallback for dev mode
+        users.set(userId, {
+          id: userId,
+          email: email.toLowerCase().trim(),
+          passwordHash,
+          name: name?.trim() || email.split('@')[0],
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       const tokens = generateTokens(userId);
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.status(201).json({
         user: { id: userId, email: email.toLowerCase(), name: name || email.split('@')[0] },
         ...tokens,
@@ -810,9 +929,30 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      const user = Array.from(users.values()).find(u => u.email === email.toLowerCase());
+      let user;
+      if (supabaseAdmin) {
+        const { data, error } = await supabaseAdmin.from('users').select('*').eq('email', email.toLowerCase()).single();
+        if (error || !data) {
+          res.status(401).json({ error: 'Invalid email or password.' });
+          return;
+        }
+        user = {
+            id: data.id,
+            email: data.email,
+            passwordHash: data.password_hash,
+            name: data.name
+        };
+      } else {
+        user = Array.from(users.values()).find(u => u.email === email.toLowerCase());
+      }
+
       if (!user) {
         res.status(401).json({ error: 'Invalid email or password.' });
+        return;
+      }
+
+      if (!user.passwordHash) {
+        res.status(500).json({ error: 'User account has no password set (database schema issue or auth misconfiguration).' });
         return;
       }
 
@@ -823,6 +963,9 @@ EXPANDED FIELD RULES:
       }
 
       const tokens = generateTokens(user.id);
+      
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.json({
         user: { id: user.id, email: user.email, name: user.name },
         ...tokens,
@@ -834,7 +977,7 @@ EXPANDED FIELD RULES:
 
   v1.post('/auth/refresh', authRateLimiter, async (req, res): Promise<void> => {
     try {
-      const { refreshToken } = req.body;
+      const refreshToken = req.body.refreshToken || (req.cookies && req.cookies.refreshToken);
 
       if (!refreshToken || typeof refreshToken !== 'string') {
         res.status(400).json({ error: 'Refresh token is required.' });
@@ -847,13 +990,22 @@ EXPANDED FIELD RULES:
         return;
       }
 
-      const user = users.get(payload.sub);
-      if (!user) {
+      let exists = false;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('users').select('id').eq('id', payload.sub).single();
+        exists = !!data;
+      } else {
+        exists = users.has(payload.sub);
+      }
+
+      if (!exists) {
         res.status(401).json({ error: 'User no longer exists.' });
         return;
       }
 
-      const tokens = generateTokens(user.id);
+      const tokens = generateTokens(payload.sub);
+      res.cookie('accessToken', tokens.accessToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 15 * 60 * 1000 });
+      res.cookie('refreshToken', tokens.refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000 });
       res.json(tokens);
     } catch (error) {
       handleApiError(error, res, 'auth/refresh');
@@ -862,7 +1014,14 @@ EXPANDED FIELD RULES:
 
   v1.get('/auth/me', requireAuth, async (req, res): Promise<void> => {
     const userId = (req as any).userId;
-    const user = users.get(userId);
+
+    let user;
+    if (supabaseAdmin) {
+      const { data } = await supabaseAdmin.from('users').select('*').eq('id', userId).single();
+      if (data) user = data;
+    } else {
+      user = users.get(userId);
+    }
 
     if (!user) {
       res.json({ id: userId, email: 'dev@local', name: 'Dev User' });
@@ -881,8 +1040,14 @@ EXPANDED FIELD RULES:
       }
       
       const userId = (req as any).userId;
-      const { invoices } = req.body;
+      const { invoices, deletedInvoiceIds } = req.body;
       
+      if (deletedInvoiceIds && deletedInvoiceIds.length > 0 && supabaseAdmin) {
+        for (const id of deletedInvoiceIds) {
+          await supabaseAdmin.from('invoices').delete().eq('id', id).eq('user_id', userId);
+        }
+      }
+
       if (!Array.isArray(invoices)) {
         res.status(400).json({ error: 'Invoices must be an array.' });
         return;
@@ -941,8 +1106,19 @@ EXPANDED FIELD RULES:
       }
       
       res.json({ success: true, syncedCount: invoices.length });
-    } catch (error) {
-      handleApiError(error, res, 'sync/push');
+    } catch (err: any) {
+      log.error('Sync push failed', {
+        message: err?.message,
+        code: err?.code,       // Postgres error code (e.g. '22P02' for invalid enum)
+        detail: err?.detail,   // Postgres detail string
+      });
+      res.status(500).json({
+        error: 'Sync failed',
+        detail: process.env.NODE_ENV !== 'production'
+            ? (err?.detail || err?.message || String(err))
+            : 'Internal server error',
+        code: err?.code,
+      });
     }
   });
 
@@ -1151,8 +1327,8 @@ EXPANDED FIELD RULES:
     });
   });
 
-  // Apply auth to all subsequent routes
-  v1.use(requireAuth);
+  // Remove blanket auth to enable guest mode
+  // v1.use(requireAuth);
 
   // ── M-01: Email Sending via Nodemailer ──
   v1.post('/invoices/:id/send-email', requireAuth, async (req, res): Promise<void> => {
@@ -1179,7 +1355,7 @@ EXPANDED FIELD RULES:
           }));
           await page.close();
         } catch (pdfErr) {
-          console.warn('[email] PDF generation failed, sending without attachment:', pdfErr);
+          log.warn('PDF generation failed', { error: pdfErr instanceof Error ? pdfErr.message : String(pdfErr) });
         }
       }
 
@@ -1219,10 +1395,10 @@ EXPANDED FIELD RULES:
         res.json({ sent: true, to, method: 'smtp' });
       } else {
         // Dev mode: log email details
-        console.log(`\n📧 [dev-email] To: ${to}`);
-        console.log(`📧 [dev-email] Subject: ${subject}`);
-        console.log(`📧 [dev-email] Body: ${(body || '').substring(0, 200)}...`);
-        console.log(`📧 [dev-email] PDF attached: ${!!pdfBuffer} (${pdfBuffer ? pdfBuffer.length : 0} bytes)\n`);
+        log.info('Dev email To', { to });
+        log.info('Dev email Subject', { subject });
+        log.info('Dev email Body', { bodyPreview: (body || '').substring(0, 200) });
+        log.info('Dev email PDF', { attached: !!pdfBuffer, bytes: pdfBuffer ? pdfBuffer.length : 0 });
 
         res.json({
           sent: true,
@@ -1237,7 +1413,7 @@ EXPANDED FIELD RULES:
   });
 
   // ── M-03: Proactive Invoice Suggestions ──
-  v1.post('/invoices/:id/suggestions', requireAuth, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/suggestions', async (req, res): Promise<void> => {
     try {
       const { invoice } = req.body;
       if (!invoice) {
@@ -1370,7 +1546,7 @@ EXPANDED FIELD RULES:
 
       // Create the cron job
       const task = cron.schedule(cronExpr, () => {
-        console.log(`[recurring] Generating invoice from template ${templateInvoiceId}`);
+        log.info('Recurring schedule trigger', { templateInvoiceId });
         // In production: clone invoice, update dates, optionally auto-send
       });
 
@@ -1421,12 +1597,15 @@ EXPANDED FIELD RULES:
   });
 
   function getNextCronRun(expression: string): string {
-    const now = new Date();
-    now.setHours(9, 0, 0, 0);
-    if (now < new Date()) {
-      now.setDate(now.getDate() + 1);
+    try {
+      return cronParser.parse(expression).next().toDate().toISOString();
+    } catch (err) {
+      log.error('Failed to parse cron expression', { expression, error: err instanceof Error ? err.message : String(err) });
+      const fallback = new Date();
+      fallback.setHours(9, 0, 0, 0);
+      if (fallback < new Date()) fallback.setDate(fallback.getDate() + 1);
+      return fallback.toISOString();
     }
-    return now.toISOString();
   }
 
   // ── Load active schedules from Supabase on startup ──
@@ -1434,10 +1613,10 @@ EXPANDED FIELD RULES:
     supabaseAdmin.from('recurring_schedules').select('*').eq('is_active', true)
       .then(({ data, error }) => {
         if (!error && data) {
-          console.log(`[startup] Loaded ${data.length} recurring schedules from Supabase`);
+          log.info('Loaded recurring schedules', { count: data.length });
           data.forEach(schedule => {
             const task = cron.schedule(schedule.cron_expression, () => {
-              console.log(`[recurring] Generating invoice from template ${schedule.template_invoice_id}`);
+              log.info('Recurring schedule trigger', { templateInvoiceId: schedule.template_invoice_id });
             });
             activeSchedules.set(schedule.id, task);
           });
@@ -1446,7 +1625,7 @@ EXPANDED FIELD RULES:
   }
 
   // ── Route: AI Invoice Generation with Server-Sent Events ──
-  v1.post('/generate-invoice-stream', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/generate-invoice-stream', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { prompt, clientContext } = req.body;
       if (!prompt || typeof prompt !== 'string') {
@@ -1488,7 +1667,7 @@ EXPANDED FIELD RULES:
         } as any,
         temperature: 0.1,
         stream: true,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       let fullContent = '';
       let chunkCount = 0;
@@ -1558,7 +1737,7 @@ EXPANDED FIELD RULES:
             json_schema: { name: 'invoice', schema: invoiceSchema },
           } as any,
           temperature: 0.1,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1574,7 +1753,7 @@ EXPANDED FIELD RULES:
     }
   });
   // ── Route: Proactive Invoice Analysis ──
-  v1.post('/invoices/:id/analyze', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/analyze', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const invoice = req.body.invoice;
 
@@ -1621,7 +1800,7 @@ RULES:
             { role: 'user', content: analysisPrompt },
           ],
           temperature: 0.3,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1643,23 +1822,23 @@ RULES:
 
 
   // ── M-02: Route: Extract Text from Receipt via OCR (Tesseract.js) ──
-  v1.post('/ocr-receipt', requireAuth, aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
+  v1.post('/ocr-receipt', aiRateLimiter, upload.single('receipt'), async (req, res): Promise<void> => {
     try {
       if (!req.file) {
         res.status(400).json({ error: 'No receipt image uploaded.' });
         return;
       }
 
-      console.log(`[ocr] Processing uploaded receipt: ${req.file.originalname} (${req.file.size} bytes)`);
+      log.info('Processing uploaded receipt', { originalname: req.file.originalname, size: req.file.size });
       const tesseract = await import('tesseract.js');
       
       const { data: { text } } = await tesseract.recognize(
         req.file.buffer,
         'eng',
-        { logger: m => console.log(`[ocr progress] ${m.status}: ${Math.round(m.progress * 100)}%`) }
+        { logger: m => log.info('OCR Progress', { status: m.status, progress: Math.round(m.progress * 100) }) }
       );
 
-      console.log(`[ocr] Extracted text length: ${text.length}`);
+      log.info('OCR Extracted text length', { length: text.length });
       res.json({ text: text.trim() });
     } catch (error) {
       handleApiError(error, res, 'ocr-receipt');
@@ -1667,7 +1846,7 @@ RULES:
   });
 
   // ── B-06: Route: Text-to-Invoice from Reviewed Transcript (Stage 2, SSE) ──
-  v1.post('/text-to-invoice-from-transcript', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/text-to-invoice-from-transcript', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { transcript, invoiceContext } = req.body;
       if (!transcript || typeof transcript !== 'string') {
@@ -1704,7 +1883,7 @@ RULES:
         } as any,
         temperature: 0.1,
         stream: true,
-      });
+      }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) });
 
       let fullContent = '';
       let chunkCount = 0;
@@ -1743,7 +1922,7 @@ RULES:
 
 
   // ── Route: OCR Import (Image → Invoice Data) ──
-  v1.post('/ocr-import', requireAuth, aiRateLimiter, upload.single('image'), async (req, res): Promise<void> => {
+  v1.post('/ocr-import', aiRateLimiter, upload.single('image'), async (req, res): Promise<void> => {
     try {
       const imageFile = req.file;
 
@@ -1766,13 +1945,13 @@ RULES:
         {
           logger: (m: any) => {
             if (m.status === 'recognizing text') {
-              console.log(`[ocr] Progress: ${Math.round(m.progress * 100)}%`);
+              log.info('OCR Progress', { progress: Math.round(m.progress * 100) });
             }
           },
         }
       );
 
-      console.log(`[ocr] Extracted ${ocrText.length} chars with ${confidence}% confidence`);
+      log.info('OCR Extracted chars', { length: ocrText.length, confidence });
 
       if (!ocrText.trim()) {
         res.status(400).json({ error: 'No text could be extracted from the image.' });
@@ -1808,7 +1987,7 @@ INSTRUCTIONS:
             json_schema: { name: 'invoice', schema: invoiceSchema },
           } as any,
           temperature: 0.1,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const content = response.choices[0]?.message?.content;
@@ -1833,7 +2012,7 @@ INSTRUCTIONS:
   });
 
   // ── Route: Generate Email Draft ──
-  v1.post('/invoices/:id/draft-email', requireAuth, aiRateLimiter, async (req, res): Promise<void> => {
+  v1.post('/invoices/:id/draft-email', aiRateLimiter, async (req, res): Promise<void> => {
     try {
       const { invoice, emailType = 'send' } = req.body;
 
@@ -1879,7 +2058,7 @@ RULES:
             { role: 'user', content: prompt },
           ],
           temperature: 0.4,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       const emailText = response.choices[0]?.message?.content ?? '';
@@ -1959,7 +2138,7 @@ RULES:
 
     } catch (error: any) {
       if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
-        console.error(`[${requestId}] PDF generation timed out after ${PDF_TIMEOUT_MS}ms`);
+        log.error('PDF generation timed out', { requestId, timeoutMs: PDF_TIMEOUT_MS });
         res.status(504).json({ error: 'PDF generation timed out. Please try again.' });
       } else {
         handleApiError(error, res, 'pdf-generation');
@@ -1994,7 +2173,7 @@ RULES:
             { role: 'user', content: prompt },
           ],
           temperature: 0.3,
-        })
+        }, { signal: AbortSignal.timeout(LLM_TIMEOUT_MS) })
       );
 
       res.json({ text: response.choices[0]?.message?.content ?? '' });
@@ -2014,26 +2193,26 @@ RULES:
 
       const token = randomUUID().replace(/-/g, '').slice(0, 16);
 
-      // Store in Supabase (or in-memory for local dev)
-      const shareData = {
-        invoiceId,
-        invoice, // B-08: Store invoice snapshot for public viewing/PDF
-        token,
-        accessLevel,
-        expiresAt: new Date(Date.now() + expiresInDays * 86400000).toISOString(),
-        isActive: true,
-        viewCount: 0,
-        createdAt: new Date().toISOString(),
-      };
+      const expiresAt = new Date(Date.now() + expiresInDays * 86400000).toISOString();
 
-      shareTokenStore.set(token, shareData);
+      if (supabaseAdmin) {
+        await supabaseAdmin.from('share_tokens').insert({
+          invoice_id: invoiceId,
+          user_id: (req as any).userId,
+          token,
+          access_level: accessLevel,
+          expires_at: expiresAt,
+          is_active: true,
+          view_count: 0
+        });
+      }
 
       const shareUrl = `${req.protocol}://${req.get('host')}/shared/${token}`;
 
       res.json({
         token,
         url: shareUrl,
-        expiresAt: shareData.expiresAt,
+        expiresAt,
         accessLevel,
       });
     } catch (error) {
@@ -2045,7 +2224,38 @@ RULES:
   v1.get('/shared/:token', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();
+        if (data && data.invoices) {
+          shareData = {
+            isActive: data.is_active,
+            expiresAt: data.expires_at,
+            accessLevel: data.access_level,
+            viewCount: data.view_count,
+            invoice: {
+              id: data.invoices.id,
+              invoiceNumber: data.invoices.invoice_number,
+              title: data.invoices.title,
+              status: data.invoices.status,
+              currency: data.invoices.currency,
+              taxRate: parseFloat(data.invoices.tax_rate),
+              discountRate: parseFloat(data.invoices.discount_rate),
+              discountType: data.invoices.discount_type,
+              shipping: parseFloat(data.invoices.shipping),
+              issueDate: data.invoices.issue_date,
+              dueDate: data.invoices.due_date,
+              notes: data.invoices.notes,
+              templateId: data.invoices.template_id,
+              themeColor: data.invoices.theme_color,
+              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },
+              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },
+              displaySettings: data.invoices.display_settings,
+              items: (data.invoices.invoice_items || []).sort((a: any,b: any)=>a.sort_order-b.sort_order).map((i: any) => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))
+            }
+          };
+        }
+      }
 
       if (!shareData) {
         res.status(404).json({ error: 'Share link not found or expired.' });
@@ -2062,8 +2272,6 @@ RULES:
         return;
       }
 
-      shareData.viewCount++;
-
       res.json({
         invoice: shareData.invoice,
         accessLevel: shareData.accessLevel,
@@ -2078,10 +2286,11 @@ RULES:
   v1.post('/shared/:token/view', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
-      if (shareData && shareData.isActive) {
-        shareData.viewCount = (shareData.viewCount || 0) + 1;
-        shareData.lastViewedAt = new Date().toISOString();
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('view_count, is_active').eq('token', token).single();
+        if (data && data.is_active) {
+          await supabaseAdmin.from('share_tokens').update({ view_count: data.view_count + 1 }).eq('token', token);
+        }
       }
       res.json({ success: true });
     } catch (error) {
@@ -2093,18 +2302,20 @@ RULES:
   v1.post('/shared/:token/pay', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*)').eq('token', token).single();
+        if (data) shareData = { isActive: data.is_active, invoice: { id: data.invoice_id } };
+      }
+
       if (!shareData || !shareData.isActive) {
         res.status(404).json({ error: 'Share link not found.' });
         return;
       }
       
-      // Update the embedded snapshot
-      shareData.invoice.status = 'paid';
-      
       // Attempt to update the original invoice in Supabase if exists
-      if (supabase) {
-        await supabase
+      if (supabaseAdmin) {
+        await supabaseAdmin
           .from('invoices')
           .update({ status: 'paid', updated_at: new Date().toISOString() })
           .eq('id', shareData.invoice.id);
@@ -2121,7 +2332,35 @@ RULES:
     let page = null;
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*, invoices (*, invoice_items (*))').eq('token', token).single();
+        if (data && data.invoices) {
+          shareData = {
+            isActive: data.is_active,
+            expiresAt: data.expires_at,
+            invoice: {
+              id: data.invoices.id,
+              title: data.invoices.title,
+              invoiceNumber: data.invoices.invoice_number,
+              currency: data.invoices.currency,
+              taxRate: parseFloat(data.invoices.tax_rate),
+              discountRate: parseFloat(data.invoices.discount_rate),
+              discountType: data.invoices.discount_type,
+              shipping: parseFloat(data.invoices.shipping),
+              issueDate: data.invoices.issue_date,
+              dueDate: data.invoices.due_date,
+              notes: data.invoices.notes,
+              templateId: data.invoices.template_id,
+              themeColor: data.invoices.theme_color,
+              businessInfo: { name: data.invoices.business_name, address: data.invoices.business_address, taxId: data.invoices.business_tax_id },
+              customerInfo: { name: data.invoices.customer_name, email: data.invoices.customer_email, address: data.invoices.customer_address },
+              displaySettings: data.invoices.display_settings,
+              items: (data.invoices.invoice_items || []).sort((a: any,b: any)=>a.sort_order-b.sort_order).map((i: any) => ({ id: i.id, description: i.description, quantity: parseFloat(i.quantity), rate: parseFloat(i.rate) }))
+            }
+          };
+        }
+      }
 
       if (!shareData || !shareData.isActive || new Date(shareData.expiresAt) < new Date()) {
         res.status(404).json({ error: 'Share link not found, revoked, or expired.' });
@@ -2163,7 +2402,11 @@ RULES:
   v1.post('/shared/:token/mark-paid', async (req, res): Promise<void> => {
     try {
       const { token } = req.params;
-      const shareData = shareTokenStore.get(token);
+      let shareData: any;
+      if (supabaseAdmin) {
+        const { data } = await supabaseAdmin.from('share_tokens').select('*').eq('token', token).single();
+        if (data) shareData = { isActive: data.is_active };
+      }
 
       if (!shareData || !shareData.isActive) {
         res.status(404).json({ error: 'Share link not found or revoked.' });
@@ -2171,13 +2414,12 @@ RULES:
       }
 
       // Razorpay integration stub — in production, verify payment with Razorpay API
-      shareData.markedPaidAt = new Date().toISOString();
-      shareData.paymentStatus = 'paid';
 
+      const markedPaidAt = new Date().toISOString();
       res.json({
         success: true,
         message: 'Invoice marked as paid. Razorpay integration coming soon.',
-        markedPaidAt: shareData.markedPaidAt,
+        markedPaidAt,
       });
     } catch (error) {
       handleApiError(error, res, 'shared-mark-paid');
@@ -2333,9 +2575,28 @@ RULES:
   const httpServer = createHttpServer(app);
 
   // ── WebSocket STT Proxy ──
+  const MAX_WS_CONNECTIONS = 50;
+  let activeWsConnections = 0;
+  const userWsSessions = new Map<string, number>();
+  const MAX_PER_USER_SESSIONS = 2;
+  const WS_PING_INTERVAL = 25_000;
+
   const wss = new WebSocketServer({ server: httpServer, path: '/ws/stt' });
 
   wss.on('connection', (browserWs, req) => {
+    let isAlive = true;
+    browserWs.on('pong', () => { isAlive = true; });
+    const pingTimer = setInterval(() => {
+        if (!isAlive) { browserWs.terminate(); return; }
+        isAlive = false;
+        browserWs.ping();
+    }, WS_PING_INTERVAL);
+
+    if (activeWsConnections >= MAX_WS_CONNECTIONS) {
+        browserWs.close(1013, 'Server capacity reached');
+        return;
+    }
+
     // ── Auth: verify JWT from query param ?token=<accessToken> ──
     const url = new URL(req.url!, `http://localhost:${PORT}`);
     const token = url.searchParams.get('token');
@@ -2344,6 +2605,8 @@ RULES:
     const isDevMode = process.env.NODE_ENV !== 'production'
       && !process.env.JWT_SECRET
       && !API_SECRET;
+
+    let userId = 'anonymous';
 
     if (!isDevMode) {
       if (!token) {
@@ -2355,38 +2618,52 @@ RULES:
         browserWs.close(4003, 'Invalid or expired token');
         return;
       }
-      console.log(`[ws/stt] Authenticated session for user ${payload.sub}`);
+      userId = payload.sub;
+      console.log(`[ws/stt] Authenticated session for user ${userId}`);
+    } else {
+      userId = 'dev-user';
     }
+
+    const current = userWsSessions.get(userId) ?? 0;
+    if (current >= MAX_PER_USER_SESSIONS) {
+        browserWs.close(4029, 'Session limit reached');
+        return;
+    }
+
+    activeWsConnections++;
+    userWsSessions.set(userId, current + 1);
 
     // ── Proxy: open connection to Python sidecar ──
     const sidecarWs = new WsClient(`ws://127.0.0.1:${STT_PORT}`);
 
-    sidecarWs.on('open', () => {
-      console.log('[ws/stt] Sidecar connection established');
-    });
-
-    let handshakeSent = false;
     const sessionUid = randomUUID();
+
+    sidecarWs.on('open', () => {
+      log.info('Sidecar connection established');
+      sidecarWs.send(JSON.stringify({
+        uid: sessionUid,
+        language: null,        // auto-detect
+        task: 'transcribe',
+        model: 'large-v3-turbo',
+        use_vad: true,
+        audio_format: 'int16',
+        sample_rate: 16000
+      }));
+    });
 
     browserWs.on('message', (data, isBinary) => {
       if (sidecarWs.readyState !== WsClient.OPEN) return;
       
-      // WhisperLive requires a JSON handshake as the FIRST message
-      // before it will accept binary audio frames
-      if (!handshakeSent) {
-        handshakeSent = true;
-        sidecarWs.send(JSON.stringify({
-          uid: sessionUid,
-          language: null,        // auto-detect
-          task: 'transcribe',
-          model: 'large-v3-turbo',
-          use_vad: true,
-        }));
-      }
-      
       // Forward audio chunks (binary)
       if (isBinary) {
         sidecarWs.send(data, { binary: true });
+      } else {
+        try {
+          const parsed = JSON.parse(data.toString());
+          if (parsed.eof) {
+            sidecarWs.send(JSON.stringify({ eof: 1 }));
+          }
+        } catch {}
       }
     });
 
@@ -2454,8 +2731,14 @@ RULES:
     });
 
     browserWs.on('close', (code, reason) => {
-      console.log(`[ws/stt] Browser disconnected (${code})`);
-      if (sidecarWs.readyState === WsClient.OPEN) {
+      clearInterval(pingTimer);
+      activeWsConnections--;
+      const n = userWsSessions.get(userId) ?? 1;
+      if (n <= 1) userWsSessions.delete(userId);
+      else userWsSessions.set(userId, n - 1);
+
+      log.info('Browser disconnected', { code, activeConnections: activeWsConnections });
+      if (sidecarWs.readyState !== WsClient.CLOSED) {
         sidecarWs.close();
       }
     });
@@ -2468,42 +2751,48 @@ RULES:
 
     browserWs.on('error', (err) => console.error('[ws/stt] Browser WS error:', err));
     sidecarWs.on('error', (err) => {
-      console.error('[ws/stt] Sidecar WS error:', err);
-      browserWs.close(1011, 'Sidecar error');
+      log.error('Sidecar WS error', err);
+      if (browserWs.readyState === WsClient.OPEN) {
+        browserWs.send(JSON.stringify({
+          type: 'error',
+          code: 'SIDECAR_FAILURE',
+          message: 'Speech recognition service unavailable'
+        }));
+      }
     });
   });
 
   const server = httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`[startup] Server running on http://localhost:${PORT}`);
-    console.log(`[startup] WebSocket STT endpoint: ws://localhost:${PORT}/ws/stt`);
-    console.log(`[startup] Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`[startup] API auth: ${API_SECRET ? 'ENABLED' : 'DISABLED (no API_SECRET set)'}`);
-    console.log(`[startup] LLM: ${LLM_MODEL} via ${LLM_HOST}`);
-    console.log(`[startup] STT Sidecar: http://localhost:${STT_PORT}`);
+    log.info('Server running', { port: PORT });
+    log.info('WebSocket STT endpoint', { port: PORT });
+    log.info('Environment', { env: process.env.NODE_ENV || 'development' });
+    log.info('API auth', { enabled: !!API_SECRET });
+    log.info('LLM Config', { model: LLM_MODEL, host: LLM_HOST });
+    log.info('STT Sidecar configured', { port: STT_PORT });
   });
 
   const shutdown = (signal: string) => {
-    console.log(`[shutdown] Received ${signal}. Graceful shutdown...`);
+    log.info('Graceful shutdown initiated', { signal });
     // Kill STT sidecar
     if (sttProcess) {
       sttProcess.removeAllListeners('exit'); // Prevent auto-restart
       sttProcess.kill('SIGTERM');
-      console.log('[shutdown] STT sidecar terminated.');
+      log.info('STT sidecar terminated');
     }
     // Close Puppeteer browser instance
     if (browserInstance) {
       browserInstance.close().catch(() => {});
-      console.log('[shutdown] Puppeteer browser closed.');
+      log.info('Puppeteer browser closed');
     }
     if (server) {
       server.close(() => {
-        console.log('[shutdown] HTTP server closed.');
-        wss.close(() => console.log('[shutdown] WebSocket server closed.'));
+        log.info('HTTP server closed');
+        wss.close(() => log.info('WebSocket server closed'));
         process.exit(0);
       });
     } else {
       setTimeout(() => {
-        console.error('[shutdown] Forced exit after timeout.');
+        log.error('Forced exit after timeout');
         process.exit(1);
       }, 10_000);
     }

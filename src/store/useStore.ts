@@ -212,7 +212,10 @@ export const useStore = create<StoreState>()(
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Sync failed');
+            const err = new Error(errorData.error || 'Sync failed') as any;
+            err.detail = errorData.detail;
+            err.code = errorData.code;
+            throw err;
           }
 
           set({
@@ -221,10 +224,12 @@ export const useStore = create<StoreState>()(
             syncError: null,
           });
         } catch (err: any) {
-          console.error('[sync] Cloud sync failed:', err);
+          const detail = err?.detail ?? err?.message ?? 'Unknown error';
+          console.error('[sync] Cloud sync failed:', detail);
+          if (err?.code) console.error('[sync] Postgres error code:', err.code);
           set({
             syncStatus: 'error',
-            syncError: err.message || 'Sync failed',
+            syncError: detail || 'Sync failed',
           });
         }
       },

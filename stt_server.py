@@ -12,7 +12,18 @@ import asyncio
 import logging
 import threading
 
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s][stt] %(message)s")
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps({
+            "ts": self.formatTime(record),
+            "level": record.levelname,
+            "msg": record.getMessage(),
+        })
+
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
+logging.root.handlers = [handler]
+logging.root.setLevel(logging.INFO)
 
 # Windows asyncio fix
 if sys.platform == 'win32':
@@ -36,24 +47,25 @@ def run_whisperlive():
       - Pushing partial + final results back to the client
     """
     server = TranscriptionServer()
+    # Whisper-live 0.9.0 requires custom paths to have a '/' or be an existing local folder.
+    # For standard models (e.g. 'large-v3-turbo'), we pass None and let the client request it.
+    custom_model_path = MODEL_PATH if ("/" in MODEL_PATH or os.path.exists(MODEL_PATH)) else None
+
     server.run(
         host="0.0.0.0",
         port=PORT,
         backend="faster_whisper",
-        faster_whisper_custom_model_path=MODEL_PATH,
-        device=DEVICE,
-        compute_type=COMPUTE,
-        # VAD configuration
-        vad_parameters={
-            "onset": 0.5,         # VAD sensitivity (0-1, lower = more sensitive)
-            "min_speech_duration_ms": 250,
-            "min_silence_duration_ms": 600,  # pause length to end a segment
-        },
-        language=None,            # auto-detect
-        task="transcribe",
+        faster_whisper_custom_model_path=custom_model_path,
         max_connection_time=300,  # 5-minute max session
-        no_voice_activity_chunks=10,  # send final after 10 silent chunks
     )
+
+def monitor_thread():
+    global wl_thread
+    while True:
+        wl_thread.join()
+        logging.error("WhisperLive thread died. Restarting...")
+        wl_thread = threading.Thread(target=run_whisperlive, daemon=True)
+        wl_thread.start()
 
 # Start WhisperLive in its own daemon thread
 wl_thread = threading.Thread(target=run_whisperlive, daemon=True)
@@ -61,24 +73,38 @@ wl_thread.start()
 logging.info(f"WhisperLive STT server started on port {PORT}")
 logging.info(f"Model: {MODEL_PATH} | Device: {DEVICE} | Compute: {COMPUTE}")
 
+monitor = threading.Thread(target=monitor_thread, daemon=True)
+monitor.start()
+
 
 # ── Health HTTP server (port+1) for Node.js startup polling ──
 import asyncio
 
 async def health_handler(reader, writer):
+    # Probe the WhisperLive WebSocket port
+    stt_alive = False
+    try:
+        probe_reader, probe_writer = await asyncio.wait_for(
+            asyncio.open_connection('127.0.0.1', PORT), timeout=1.0
+        )
+        probe_writer.close()
+        await probe_writer.wait_closed()
+        stt_alive = True
+    except Exception:
+        stt_alive = False
+
+    status_code = "200 OK" if stt_alive else "503 Service Unavailable"
     body = json.dumps({
-        "status": "ok",
+        "status": "ok" if stt_alive else "starting",
         "backend": "whisper-live",
         "model": MODEL_PATH,
-        "device": DEVICE,
+        "stt_port": PORT,
+        "stt_alive": stt_alive,
     }).encode()
     response = (
-        b"HTTP/1.1 200 OK\r\n"
-        b"Content-Type: application/json\r\n"
-        b"Connection: close\r\n"
-        + f"Content-Length: {len(body)}\r\n\r\n".encode()
-        + body
-    )
+        f"HTTP/1.1 {status_code}\r\nContent-Type: application/json\r\nConnection: close\r\n"
+        f"Content-Length: {len(body)}\r\n\r\n"
+    ).encode() + body
     writer.write(response)
     await writer.drain()
     writer.close()

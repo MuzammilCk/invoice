@@ -10,26 +10,39 @@ import { z } from 'zod';
 import { TranscriptReviewPanel } from '../components/TranscriptReviewPanel';
 import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
 import { apiClient } from '../lib/apiClient';
+import { startStreamPCM } from '../lib/audio/streamPCM';
+
+type RecordingState = 'idle' | 'recording' | 'processing' | 'complete';
 
 export function Dashboard() {
   const navigate = useNavigate();
   const { invoices, businessInfo, addInvoice } = useStore();
   const [isAICreateOpen, setIsAICreateOpen] = useState(false);
   const [aiMode, setAiMode] = useState<'text' | 'voice' | 'ocr'>('text');
-  const [isRecording, setIsRecording] = useState(false);
   const ocrFileInputRef = React.useRef<HTMLInputElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const stopStreamRef = useRef<(() => void) | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingStage, setStreamingStage] = useState<'idle' | 'generating' | 'parsing'>('idle');
   const [error, setError] = useState('');
 
   // B-06: Voice transcript review state
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcript, setTranscript] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState('');
   const [transcriptConfidence, setTranscriptConfidence] = useState(0);
   const [voiceStage, setVoiceStage] = useState<'idle' | 'recording' | 'transcribing' | 'transcript-review'>('idle');
+
+  React.useEffect(() => {
+    if (recordingState !== 'processing') return;
+    const timeout = setTimeout(() => {
+      setRecordingState('idle');
+      setVoiceStage('idle');
+      setError('Transcription timed out. Please try again.');
+    }, 30_000);
+    return () => clearTimeout(timeout);
+  }, [recordingState]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -222,24 +235,6 @@ export function Dashboard() {
           }
         }
         setStreamingStage('idle');
-
-      } else if (aiMode === 'voice' && audioBlob) {
-        // B-10: Voice mode — just start transcription (review handled separately)
-        setVoiceStage('transcribing');
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'voice.webm');
-        const res = await apiClient('/api/v1/transcribe-audio', { method: 'POST', body: formData });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({ error: 'Transcription failed' }));
-          throw new Error(errData.error || 'Transcription failed');
-        }
-        const { transcript: sttTranscript, language, confidence } = await res.json();
-        setTranscript(sttTranscript);
-        setDetectedLanguage(language);
-        setTranscriptConfidence(confidence);
-        setVoiceStage('transcript-review');
-        setIsGenerating(false);
-        return; // Wait for user to review transcript before generating
       }
 
       if (generatedData) {
@@ -347,31 +342,88 @@ export function Dashboard() {
     setIsAICreateOpen(false);
     setPrompt('');
     setTranscript('');
-    setAudioBlob(null);
     navigate(`/editor/${newInvoice.id}`);
   };
 
   const toggleRecording = async () => {
-    if (isRecording) {
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        const chunks: BlobPart[] = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          setAudioBlob(blob);
-          stream.getTracks().forEach(track => track.stop());
-        };
-        mediaRecorder.start();
-        setIsRecording(true);
-      } catch (err) {
-        alert("Microphone access denied or unavailable.");
+    if (recordingState === 'recording') {
+      stopStreamRef.current?.();
+      stopStreamRef.current = null;
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close(1000, 'Recording stopped');
       }
+      setRecordingState('processing');
+      setVoiceStage('transcribing');
+      return;
+    }
+
+    try {
+      setRecordingState('recording');
+      setVoiceStage('recording');
+      setTranscript('');
+      setDetectedLanguage('');
+      setError('');
+      
+      // Setup WebSocket
+      const { accessToken } = useStore.getState();
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${protocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = async () => {
+        stopStreamRef.current = await startStreamPCM(ws, (ctx, proc) => {
+          // Stream started
+        }, (err) => {
+          setRecordingState('idle');
+          setVoiceStage('idle');
+          setError('Microphone access failed: ' + err.message);
+        });
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          
+          if (msg.type === 'stt_ready') {
+            return;
+          } else if (msg.type === 'partial') {
+            setTranscript(msg.text); // Real-time UI feedback
+          } else if (msg.type === 'final') {
+            setTranscript(msg.text);
+            setDetectedLanguage(msg.language || 'en');
+            setTranscriptConfidence(msg.confidence || 0);
+            setRecordingState('complete');
+            setVoiceStage('transcript-review');
+          } else if (msg.type === 'error') {
+            setError(msg.message || 'Transcription failed');
+            setRecordingState('idle');
+            setVoiceStage('idle');
+          }
+        } catch (err) {
+          // Ignore non-JSON binary heartbeat frames
+        }
+      };
+
+      ws.onerror = () => {
+        setError('WebSocket connection to STT failed.');
+        setRecordingState('idle');
+        setVoiceStage('idle');
+      };
+
+      ws.onclose = (event) => {
+        if (event.code === 4001 || event.code === 4003) {
+          setError('Authentication failed. Please log in again.');
+          setRecordingState('idle');
+          setVoiceStage('idle');
+        }
+      };
+
+    } catch (err) {
+      setError('Microphone access denied or unavailable.');
+      setRecordingState('idle');
+      setVoiceStage('idle');
     }
   };
 
@@ -623,17 +675,15 @@ export function Dashboard() {
                          <button 
                            onClick={toggleRecording}
                            disabled={voiceStage === 'transcribing'}
-                           className={`w-24 h-24 flex items-center justify-center transition-all disabled:opacity-50 sketched-border ${isRecording ? 'bg-red-950/40 text-red-500 scale-110 shadow-[0_0_30px_rgba(239,68,68,0.2)] border-red-500/50' : 'bg-[#15171c] text-[#bf953f]/50 hover:bg-[#bf953f]/10 hover:text-[#bf953f] border-[#bf953f]/20 hover:border-[#bf953f]/50'}`}
+                           className={`w-24 h-24 flex items-center justify-center transition-all disabled:opacity-50 sketched-border ${recordingState === 'recording' ? 'bg-red-950/40 text-red-500 scale-110 shadow-[0_0_30px_rgba(239,68,68,0.2)] border-red-500/50' : 'bg-[#15171c] text-[#bf953f]/50 hover:bg-[#bf953f]/10 hover:text-[#bf953f] border-[#bf953f]/20 hover:border-[#bf953f]/50'}`}
                          >
-                           <Mic className={`w-10 h-10 ${isRecording ? 'animate-pulse' : ''}`} />
+                           <Mic className={`w-10 h-10 ${recordingState === 'recording' ? 'animate-pulse' : ''}`} />
                          </button>
                          <div className="mt-6 text-center font-serif italic">
                            {voiceStage === 'transcribing' ? (
                              <p className="text-[#bf953f] font-bold flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Transcribing with Whisper...</p>
-                           ) : isRecording ? (
+                           ) : recordingState === 'recording' ? (
                              <p className="text-red-400 font-bold animate-pulse flex items-center gap-2"><span className="w-2 h-2 bg-red-500"></span> Recording in progress...</p>
-                           ) : audioBlob ? (
-                             <p className="text-emerald-400 font-bold">Audio recorded. Ready to process.</p>
                            ) : (
                              <p className="text-[#a09e91]">Tap to start recording</p>
                            )}
@@ -662,10 +712,10 @@ export function Dashboard() {
                </div>
                
                {/* Actions — only show when not in transcript review mode */}
-               {voiceStage !== 'transcript-review' && (
+               {(voiceStage !== 'transcript-review' && aiMode !== 'voice') && (
                  <div className="flex justify-end gap-3 relative z-10">
                    <button 
-                     disabled={isGenerating || (aiMode === 'text' ? !prompt : !audioBlob)} 
+                     disabled={isGenerating || (aiMode === 'text' ? !prompt : false)} 
                      onClick={handleCreateAI} 
                      className={`px-8 py-3 text-[#0f1115] font-serif font-black italic tracking-wider flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-[#bf953f] to-[#aa771c] hover:from-[#fcf6ba] hover:to-[#bf953f] shadow-[0_0_20px_rgba(191,149,63,0.3)]`}
                    >

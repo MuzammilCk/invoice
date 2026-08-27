@@ -8,7 +8,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ── Custom types ──
-CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'cancelled');
+CREATE TYPE invoice_status AS ENUM ('draft', 'pending', 'sent', 'viewed', 'partially-paid', 'paid', 'overdue', 'disputed', 'in-review', 'approved', 'cancelled', 'void');
 CREATE TYPE audit_action AS ENUM ('created', 'updated', 'deleted', 'exported', 'shared', 'status_changed');
 CREATE TYPE share_access AS ENUM ('view', 'comment', 'edit');
 CREATE TYPE recurring_frequency AS ENUM ('weekly', 'biweekly', 'monthly', 'quarterly', 'annually');
@@ -19,6 +19,7 @@ CREATE TYPE recurring_frequency AS ENUM ('weekly', 'biweekly', 'monthly', 'quart
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
   name TEXT NOT NULL DEFAULT '',
   business_name TEXT DEFAULT '',
   business_address TEXT DEFAULT '',
@@ -170,6 +171,7 @@ CREATE TABLE IF NOT EXISTS recurring_schedules (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   template_invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
   frequency recurring_frequency NOT NULL DEFAULT 'monthly',
+  cron_expression TEXT,
   next_run_at TIMESTAMPTZ NOT NULL,
   last_run_at TIMESTAMPTZ,
   is_active BOOLEAN DEFAULT true,

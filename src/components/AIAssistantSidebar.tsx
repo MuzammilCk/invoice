@@ -11,6 +11,9 @@ import { buildClientContext } from '../lib/ai-context';
 import { TranscriptReviewPanel } from './TranscriptReviewPanel';
 import { apiClient } from '../lib/apiClient';
 import { AnalysisSuggestionCard } from './AnalysisSuggestionCard';
+import { startStreamPCM } from '../lib/audio/streamPCM';
+
+type RecordingState = 'idle' | 'recording' | 'processing' | 'complete';
 
 interface AIFormProps {
   onGenerate: (data: Partial<Invoice>) => void;
@@ -39,24 +42,20 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [auditMessage, setAuditMessage] = useState('');
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [error, setError] = useState('');
-  
-  // New State for SSE and Pipeline
-  const [pendingChanges, setPendingChanges] = useState<Partial<Invoice> | null>(null);
+  const [streamingStage, setStreamingStage] = useState('idle');
   const [streamingContent, setStreamingContent] = useState('');
-  const [streamingStage, setStreamingStage] = useState<'idle' | 'generating' | 'parsing' | 'reviewing'>('idle');
+  const [voiceStage, setVoiceStage] = useState('idle');
   const [transcript, setTranscript] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState('');
-  const [voiceStage, setVoiceStage] = useState<'idle' | 'recording' | 'transcribing' | 'transcript-review' | 'reviewing' | 'applying'>('idle');
   const [transcriptConfidence, setTranscriptConfidence] = useState(0);
+  const [pendingChanges, setPendingChanges] = useState<Partial<Invoice> | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
-  const [auditIssues, setAuditIssues] = useState<{code: string; field: string; message: string; severity: 'error' | 'warning'}[]>([]);
-  
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const speechRecognitionRef = useRef<any>(null);
+  const [auditMessage, setAuditMessage] = useState('');
+  const [auditIssues, setAuditIssues] = useState<any[]>([]);
+
+  const stopStreamRef = useRef<(() => void) | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   React.useEffect(() => {
@@ -66,6 +65,17 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       }
     };
   }, []);
+
+  React.useEffect(() => {
+    if (recordingState !== 'processing') return;
+    const timeout = setTimeout(() => {
+      setRecordingState('idle');
+      setVoiceStage('idle');
+      setIsGenerating(false);
+      setError('Transcription timed out. Please try again.');
+    }, 30_000);
+    return () => clearTimeout(timeout);
+  }, [recordingState]);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !invoice) return;
@@ -180,34 +190,30 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/ogg';
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
+      setRecordingState('recording');
       setVoiceStage('recording');
-      setIsRecording(true);
       setTranscript('');
       setDetectedLanguage('');
       setError('');
 
       const { accessToken } = useStore.getState();
-      const wsUrl = `ws://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const wsUrl = `${wsProtocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
-      let sttReady = false;
+      let whisperLiveHasData = false;
 
-      ws.onopen = () => {
-        console.log('[ws/stt] Connected — waiting for STT server ready signal');
-        // DO NOT start mediaRecorder here
+      ws.onopen = async () => {
+        console.log('[ws/stt] Connected');
+        stopStreamRef.current = await startStreamPCM(ws, (ctx, proc) => {
+          // Stream started
+        }, (err) => {
+          setRecordingState('idle');
+          setVoiceStage('idle');
+          setError('Microphone access failed: ' + err.message);
+        });
       };
 
       ws.onmessage = (event) => {
@@ -215,24 +221,22 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
           const msg = JSON.parse(event.data as string);
           
           if (msg.type === 'stt_ready') {
-            if (!sttReady) {
-              sttReady = true;
-              mediaRecorder.start(250);
-              console.log('[ws/stt] STT ready — streaming audio');
-            }
             return;
           }
           
           if (msg.type === 'partial') {
+            whisperLiveHasData = true;
             setTranscript(msg.text);
           } else if (msg.type === 'final') {
             setTranscript(msg.text);
             setDetectedLanguage(msg.language || '');
             setTranscriptConfidence(msg.confidence || 0);
+            setRecordingState('complete');
             setVoiceStage('transcript-review');
             setIsGenerating(false);
           } else if (msg.type === 'error') {
             setError(msg.message || 'Transcription failed');
+            setRecordingState('idle');
             setVoiceStage('idle');
             setIsGenerating(false);
           }
@@ -242,53 +246,18 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       ws.onerror = (err) => {
         console.error('[ws/stt] WebSocket error:', err);
         setError('WebSocket connection to STT failed. Check stt_server is running.');
+        setRecordingState('idle');
         setVoiceStage('idle');
-        setIsRecording(false);
         setIsGenerating(false);
       };
 
       ws.onclose = (event) => {
         if (event.code === 4001 || event.code === 4003) {
           setError('Authentication failed. Please log in again.');
+          setRecordingState('idle');
           setVoiceStage('idle');
         }
       };
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-          event.data.arrayBuffer().then(buf => ws.send(buf));
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (speechRecognitionRef.current) {
-          speechRecognitionRef.current.stop();
-          speechRecognitionRef.current = null;
-        }
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close(1000, 'Recording stopped');
-        }
-        setVoiceStage('transcribing');
-        setIsGenerating(true);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = '';
-        recognition.onresult = (event: any) => {
-          let interim = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            interim += event.results[i][0].transcript;
-          }
-          setTranscript(interim);
-        };
-        speechRecognitionRef.current = recognition;
-        recognition.start();
-      }
 
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
@@ -296,16 +265,20 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       } else {
         setError('Microphone unavailable: ' + err.message);
       }
+      setRecordingState('idle');
       setVoiceStage('idle');
-      setIsRecording(false);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+    stopStreamRef.current?.();
+    stopStreamRef.current = null;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close(1000, 'Recording stopped');
     }
+    setRecordingState('processing');
+    setVoiceStage('transcribing');
+    setIsGenerating(true);
   };
 
   // B-06: Stage 2 — Generate invoice from reviewed transcript (SSE streaming)
@@ -485,12 +458,12 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
               </button>
               
               <button
-                onClick={isRecording ? stopRecording : startRecording}
-                disabled={streamingStage !== 'idle' && !isRecording}
-                className={`p-3 sketched-border transition-all flex items-center justify-center w-12 ${isRecording ? 'bg-red-950/40 border-red-500/50 text-red-500 animate-pulse' : 'bg-[#1a1a1a] border-[#bf953f]/30 hover:bg-[#bf953f]/10 text-[#bf953f]/50 hover:text-[#bf953f] hover:border-[#bf953f]/50'}`}
-                title={isRecording ? 'Stop Recording' : 'Dictate Instructions'}
+                onClick={recordingState === 'recording' ? stopRecording : startRecording}
+                disabled={streamingStage !== 'idle' && recordingState !== 'recording'}
+                className={`p-3 sketched-border transition-all flex items-center justify-center w-12 ${recordingState === 'recording' ? 'bg-red-950/40 border-red-500/50 text-red-500 animate-pulse' : 'bg-[#1a1a1a] border-[#bf953f]/30 hover:bg-[#bf953f]/10 text-[#bf953f]/50 hover:text-[#bf953f] hover:border-[#bf953f]/50'}`}
+                title={recordingState === 'recording' ? 'Stop Recording' : 'Dictate Instructions'}
               >
-                 {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
+                 {recordingState === 'recording' ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
               </button>
             </div>
             
