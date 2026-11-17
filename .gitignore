@@ -6,9 +6,18 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Models & Weights
 models/
 invoice-qwen2.5-1.5b-q8_0/
+*.gguf
+*gguf
+
+# Python artifacts
 __pycache__/
 *.pyc
 *.pyo
-*gguf
+
+# Generated PDFs & temporary exports
+*.pdf
+generated/
