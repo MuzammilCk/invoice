@@ -2,15 +2,10 @@ import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { Invoice } from '../types';
 import { generateId } from '../lib/utils';
-import { Send, FileText, CheckCircle2, Sparkles, Languages, Bot, Mic, Square, Shield } from 'lucide-react';
+import { Mic, Square, Loader2, Bot } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { z } from 'zod';
-import { AIResponseSchema, validateAIResponse } from '../lib/ai-schemas';
-import { AIChangeDiff } from './AIChangeDiff';
-import { buildClientContext } from '../lib/ai-context';
+import { validateAIResponse } from '../lib/ai-schemas';
 import { TranscriptReviewPanel } from './TranscriptReviewPanel';
-import { apiClient } from '../lib/apiClient';
-import { AnalysisSuggestionCard } from './AnalysisSuggestionCard';
 import { startStreamPCM } from '../lib/audio/streamPCM';
 
 type RecordingState = 'idle' | 'recording' | 'processing' | 'complete';
@@ -19,41 +14,18 @@ interface AIFormProps {
   onGenerate: (data: Partial<Invoice>) => void;
 }
 
-function stripPII(invoice: Invoice): object {
-  return {
-    items: invoice.items.map(i => ({
-      description: i.description,
-      quantity: i.quantity,
-      rate: i.rate,
-    })),
-    taxRate: invoice.taxRate,
-    currency: invoice.currency,
-    notes: invoice.notes,
-  };
-}
-
-const MAX_PROMPT_LENGTH = 1500;
-
 export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
   const { id } = useParams();
-  const { invoices, updateInvoice } = useStore();
+  const { invoices } = useStore();
   const invoice = invoices.find(inv => inv.id === id);
 
-  const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isRewriting, setIsRewriting] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [error, setError] = useState('');
-  const [streamingStage, setStreamingStage] = useState('idle');
-  const [streamingContent, setStreamingContent] = useState('');
   const [voiceStage, setVoiceStage] = useState('idle');
   const [transcript, setTranscript] = useState('');
   const [detectedLanguage, setDetectedLanguage] = useState('');
   const [transcriptConfidence, setTranscriptConfidence] = useState(0);
-  const [pendingChanges, setPendingChanges] = useState<Partial<Invoice> | null>(null);
-  const [isAuditing, setIsAuditing] = useState(false);
-  const [auditMessage, setAuditMessage] = useState('');
-  const [auditIssues, setAuditIssues] = useState<any[]>([]);
+  const [isApplying, setIsApplying] = useState(false);
 
   const stopStreamRef = useRef<(() => void) | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -66,127 +38,16 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     };
   }, []);
 
+  // Timeout: if STT doesn't respond within 30s after stop, reset
   React.useEffect(() => {
     if (recordingState !== 'processing') return;
     const timeout = setTimeout(() => {
       setRecordingState('idle');
       setVoiceStage('idle');
-      setIsGenerating(false);
       setError('Transcription timed out. Please try again.');
     }, 30_000);
     return () => clearTimeout(timeout);
   }, [recordingState]);
-
-  const handleGenerate = async () => {
-    if (!prompt.trim() || !invoice) return;
-
-    setStreamingStage('generating');
-    setStreamingContent('');
-    setError('');
-
-    try {
-      const invoiceContext = stripPII(invoice);
-      let clientContext = null;
-      if (invoice.customerInfo?.name) {
-        clientContext = buildClientContext(invoices, invoice.customerInfo.name);
-      }
-
-      const response = await apiClient('/api/v1/generate-invoice-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `Current invoice context: ${JSON.stringify(invoiceContext)}. User request: ${prompt}. Return updated fields.`,
-          clientContext,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate');
-      }
-
-      // ── Read SSE stream ──
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) throw new Error('No response stream');
-
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.slice(7);
-            continue; // Event type tracking (optional)
-          }
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.stage) {
-                setStreamingStage(data.stage === 'parsing' ? 'parsing' : 'generating');
-              }
-
-              if (data.partial) {
-                setStreamingContent(data.partial);
-              }
-
-              if (data.error) {
-                setError(data.error);
-                setStreamingStage('idle');
-                return;
-              }
-
-              // Final result — stage to pending changes
-              if (data.customerInfo || data.items) {
-                const validated = validateAIResponse(data);
-                if (!validated) {
-                  setError('AI returned invalid data. Please try rephrasing.');
-                  setStreamingStage('idle');
-                  return;
-                }
-
-                const mappedData: Partial<Invoice> = {
-                  ...(validated.customerInfo ? {
-                    customerInfo: {
-                      name: validated.customerInfo.name || '',
-                      email: validated.customerInfo.email || '',
-                      address: validated.customerInfo.address || '',
-                    }
-                  } : {}),
-                  items: validated.items.map(item => ({ ...item, id: generateId() })),
-                  taxRate: validated.taxRate,
-                  notes: validated.notes,
-                  ...(validated.templateId ? { templateId: validated.templateId } : {}),
-                  ...(validated.currency ? { currency: validated.currency } : {}),
-                  ...(validated.title ? { title: validated.title } : {}),
-                  ...(validated.themeColor ? { themeColor: validated.themeColor } : {}),
-                  ...(validated.discountRate !== undefined ? { discountRate: validated.discountRate } : {}),
-                  ...(validated.dueDate ? { dueDate: validated.dueDate } : {}),
-                  ...(validated.shipping !== undefined ? { shipping: validated.shipping } : {}),
-                };
-
-                setPendingChanges(mappedData);
-                setStreamingStage('reviewing');
-              }
-            } catch {}
-          }
-        }
-      }
-
-      setPrompt('');
-    } catch (err: any) {
-      setError(err.message);
-      setStreamingStage('idle');
-    }
-  };
 
   const startRecording = async () => {
     try {
@@ -196,36 +57,29 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       setDetectedLanguage('');
       setError('');
 
-      const { accessToken } = useStore.getState();
       const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${wsProtocol}://${window.location.host}/ws/stt${accessToken ? `?token=${accessToken}` : ''}`;
+      const wsUrl = `${wsProtocol}://${window.location.host}/ws/stt`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.binaryType = 'arraybuffer';
 
-      let whisperLiveHasData = false;
-
       ws.onopen = async () => {
-        console.log('[ws/stt] Connected');
-        stopStreamRef.current = await startStreamPCM(ws, (ctx, proc) => {
-          // Stream started
-        }, (err) => {
-          setRecordingState('idle');
-          setVoiceStage('idle');
-          setError('Microphone access failed: ' + err.message);
-        });
+        stopStreamRef.current = await startStreamPCM(
+          ws,
+          () => { /* stream started */ },
+          (err) => {
+            setRecordingState('idle');
+            setVoiceStage('idle');
+            setError('Microphone access failed: ' + err.message);
+          }
+        ) ?? null;
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data as string);
-          
-          if (msg.type === 'stt_ready') {
-            return;
-          }
-          
+          if (msg.type === 'stt_ready') return;
           if (msg.type === 'partial') {
-            whisperLiveHasData = true;
             setTranscript(msg.text);
           } else if (msg.type === 'final') {
             setTranscript(msg.text);
@@ -233,30 +87,18 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
             setTranscriptConfidence(msg.confidence || 0);
             setRecordingState('complete');
             setVoiceStage('transcript-review');
-            setIsGenerating(false);
           } else if (msg.type === 'error') {
             setError(msg.message || 'Transcription failed');
             setRecordingState('idle');
             setVoiceStage('idle');
-            setIsGenerating(false);
           }
         } catch {}
       };
 
-      ws.onerror = (err) => {
-        console.error('[ws/stt] WebSocket error:', err);
-        setError('WebSocket connection to STT failed. Check stt_server is running.');
+      ws.onerror = () => {
+        setError('WebSocket connection to STT failed. Is stt_server.py running?');
         setRecordingState('idle');
         setVoiceStage('idle');
-        setIsGenerating(false);
-      };
-
-      ws.onclose = (event) => {
-        if (event.code === 4001 || event.code === 4003) {
-          setError('Authentication failed. Please log in again.');
-          setRecordingState('idle');
-          setVoiceStage('idle');
-        }
       };
 
     } catch (err: any) {
@@ -278,27 +120,20 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
     }
     setRecordingState('processing');
     setVoiceStage('transcribing');
-    setIsGenerating(true);
   };
 
-  // B-06: Stage 2 — Generate invoice from reviewed transcript (SSE streaming)
+  // Stage 2: Send confirmed transcript to LLM for normalization
   const handleTranscriptProceed = async () => {
     if (!invoice || !transcript.trim()) return;
     setVoiceStage('applying');
-    setStreamingStage('generating');
-    setStreamingContent('');
+    setIsApplying(true);
     setError('');
 
     try {
-      const invoiceContext = stripPII(invoice);
-
-      const response = await apiClient('/api/v1/text-to-invoice-from-transcript', {
+      const response = await fetch('/api/v1/text-to-invoice-from-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript,
-          invoiceContext,
-        }),
+        body: JSON.stringify({ transcript }),
       });
 
       if (!response.ok) {
@@ -306,7 +141,7 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
         throw new Error(errorData.error || 'Failed to generate from transcript');
       }
 
-      // Read SSE stream (same pattern as handleGenerate)
+      // Read SSE stream
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       if (!reader) throw new Error('No response stream');
@@ -323,28 +158,40 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.stage) setStreamingStage(data.stage === 'parsing' ? 'parsing' : 'generating');
-              if (data.partial) setStreamingContent(data.partial);
-              if (data.error) { setError(data.error); setStreamingStage('idle'); setVoiceStage('idle'); return; }
-              if (data.customerInfo || data.items) {
+              if (data.error) {
+                setError(data.error);
+                setVoiceStage('idle');
+                return;
+              }
+              if (data.recipient || data.items) {
                 const validated = validateAIResponse(data);
-                if (!validated) { setError('AI returned invalid data. Please try again.'); setStreamingStage('idle'); setVoiceStage('idle'); return; }
+                if (!validated) {
+                  setError('AI returned invalid data. Please try again.');
+                  setVoiceStage('idle');
+                  return;
+                }
+                // Map to Invoice fields
                 const mappedData: Partial<Invoice> = {
-                  ...(validated.customerInfo ? { customerInfo: { name: validated.customerInfo.name || '', email: validated.customerInfo.email || '', address: validated.customerInfo.address || '' } } : {}),
-                  items: validated.items.map(item => ({ ...item, id: generateId() })),
-                  taxRate: validated.taxRate,
-                  notes: validated.notes,
-                  ...(validated.templateId ? { templateId: validated.templateId } : {}),
-                  ...(validated.currency ? { currency: validated.currency } : {}),
-                  ...(validated.title ? { title: validated.title } : {}),
-                  ...(validated.themeColor ? { themeColor: validated.themeColor } : {}),
-                  ...(validated.discountRate !== undefined ? { discountRate: validated.discountRate } : {}),
-                  ...(validated.dueDate ? { dueDate: validated.dueDate } : {}),
-                  ...(validated.shipping !== undefined ? { shipping: validated.shipping } : {}),
+                  ...(validated.recipient ? {
+                    customerInfo: {
+                      name: validated.recipient.name,
+                      email: '',
+                      address: validated.recipient.address || '',
+                    }
+                  } : {}),
+                  ...(validated.date ? { issueDate: new Date(validated.date).toISOString() } : {}),
+                  items: validated.items.map(item => ({
+                    id: generateId(),
+                    description: item.description,
+                    quantity: 1,
+                    rate: item.price,
+                  })),
+                  notes: validated.notes || '',
                 };
-                setPendingChanges(mappedData);
-                setStreamingStage('reviewing');
-                setVoiceStage('reviewing');
+                onGenerate(mappedData);
+                setVoiceStage('idle');
+                setRecordingState('idle');
+                setTranscript('');
               }
             } catch {}
           }
@@ -352,236 +199,86 @@ export function AIAssistantSidebar({ onGenerate }: AIFormProps) {
       }
     } catch (err: any) {
       setError(err.message);
-      setStreamingStage('idle');
       setVoiceStage('idle');
+    } finally {
+      setIsApplying(false);
     }
   };
 
-  // B-07: Server-side audit using comprehensive /validate endpoint
-  const handleAudit = async () => {
-    if (!invoice) return;
-    setIsAuditing(true);
-    setAuditMessage('');
-    setAuditIssues([]);
+  const handleTranscriptCancel = () => {
+    setVoiceStage('idle');
+    setRecordingState('idle');
+    setTranscript('');
     setError('');
-
-    try {
-      const response = await apiClient(`/api/v1/invoices/${invoice.id}/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoice }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Validation request failed');
-      }
-
-      const result = await response.json();
-      setAuditIssues(result.issues || []);
-
-      if (result.valid) {
-        setAuditMessage(`✅ Compliant — ${result.warningCount} warning(s), no errors. Ready to send!`);
-      } else {
-        setAuditMessage(`⚠️ ${result.errorCount} error(s) and ${result.warningCount} warning(s) found.`);
-      }
-    } catch (err: any) {
-      setError(`Audit failed: ${err.message}`);
-    } finally {
-      setIsAuditing(false);
-    }
-  };
-
-  const handleRewriteNotes = async () => {
-    if (!invoice || !invoice.notes) return;
-    setIsRewriting(true);
-    setError('');
-    
-    try {
-      const response = await apiClient('/api/v1/rewrite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: invoice.notes, 
-          context: 'Rewrite this invoice note to be more professional, polite, and persuasive for quick payment.' 
-        }),
-      });
-
-      if (!response.ok) throw new Error('Rewrite failed');
-      
-      const data = await response.json();
-      updateInvoice(invoice.id, { notes: data.text });
-      
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setIsRewriting(false);
-    }
   };
 
   return (
-    <div className="ai-sidebar w-[320px] border-r border-[#bf953f]/20 flex flex-col bg-[#15171c] flex-shrink-0 h-full overflow-hidden shadow-[10px_0_30px_rgba(0,0,0,0.5)] z-20 relative">
-      <div className="p-6 flex-1 flex flex-col overflow-y-auto custom-scrollbar">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <label className="text-xs font-serif font-bold text-[#a09e91] uppercase tracking-widest flex items-center gap-2">
-              <Bot className="w-4 h-4 text-[#bf953f]" /> AI Workbench
-            </label>
+    <div className="w-80 flex-shrink-0 h-full border-l border-[#bf953f]/20 bg-[#0f1115] flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="p-4 border-b border-[#bf953f]/20 flex items-center gap-2">
+        <Bot className="w-4 h-4 text-[#bf953f]" />
+        <span className="text-sm font-serif italic font-bold text-[#bf953f]">Voice Input</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Error */}
+        {error && (
+          <div className="p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-xs text-red-400 font-serif italic">
+            {error}
           </div>
-          <div className="space-y-3">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value.substring(0, MAX_PROMPT_LENGTH))}
-              maxLength={MAX_PROMPT_LENGTH}
-              placeholder="e.g. Add 2 hours for design consulting at 150/hr..."
-              className="w-full text-sm font-serif italic bg-[#1a1a1a] sketched-border border-[#bf953f]/30 p-4 text-[#fcf6ba] placeholder:text-[#a09e91]/50 focus:outline-none focus:border-[#bf953f] min-h-[140px] transition-colors shadow-[inset_0_0_15px_rgba(0,0,0,0.5)] resize-none"
-            />
-            <span className="text-[10px] text-[#bf953f] font-serif italic text-right block uppercase tracking-widest">
-              {prompt.length}/{MAX_PROMPT_LENGTH}
-            </span>
-            {error && <p className="text-red-500 text-xs mt-2 font-serif italic">{error}</p>}
-            
-            <div className="flex gap-2">
-              <button
-                onClick={handleGenerate}
-                disabled={streamingStage !== 'idle' || !prompt.trim()}
-                className="flex-1 p-3 bg-gradient-to-r from-[#bf953f] to-[#aa771c] hover:from-[#fcf6ba] hover:to-[#bf953f] transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-[#0f1115] text-sm font-serif italic font-black shadow-[0_0_15px_rgba(191,149,63,0.3)] sketched-border border-transparent"
-              >
-                {streamingStage !== 'idle' && streamingStage !== 'reviewing' && prompt.trim() ? (
-                   <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                   </svg>
-                ) : (
-                   <Sparkles className="w-4 h-4 text-[#0f1115]" />
-                )}
-                Update
-              </button>
-              
-              <button
-                onClick={recordingState === 'recording' ? stopRecording : startRecording}
-                disabled={streamingStage !== 'idle' && recordingState !== 'recording'}
-                className={`p-3 sketched-border transition-all flex items-center justify-center w-12 ${recordingState === 'recording' ? 'bg-red-950/40 border-red-500/50 text-red-500 animate-pulse' : 'bg-[#1a1a1a] border-[#bf953f]/30 hover:bg-[#bf953f]/10 text-[#bf953f]/50 hover:text-[#bf953f] hover:border-[#bf953f]/50'}`}
-                title={recordingState === 'recording' ? 'Stop Recording' : 'Dictate Instructions'}
-              >
-                 {recordingState === 'recording' ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
-              </button>
-            </div>
-            
-            {/* B-06: 3-Stage Voice Pipeline Feedback */}
-            {voiceStage !== 'idle' && (
-              <div className="mt-3 font-serif italic">
-                {/* Stage 1: Recording with live transcript */}
-                {voiceStage === 'recording' && (
-                  <div className="p-3 bg-[#1a1a1a] sketched-border border-[#bf953f]/30">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                      <span className="text-xs font-bold text-red-400">Recording...</span>
-                    </div>
-                    {transcript && (
-                      <p className="text-xs text-[#a09e91] bg-[#0f1115] p-2 sketched-border border-[#bf953f]/10 leading-relaxed">
-                        "{transcript}"
-                      </p>
-                    )}
-                  </div>
-                )}
+        )}
 
-                {/* Stage 2: Transcribing (Whisper processing) */}
-                {voiceStage === 'transcribing' && (
-                  <div className="p-3 bg-[#1a1a1a] sketched-border border-[#bf953f]/30 flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4 text-[#bf953f]" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    <span className="text-xs text-[#bf953f] font-bold">Transcribing with Whisper (high accuracy)...</span>
-                  </div>
-                )}
-
-                {/* Stage 2.5: Transcript Review (B-06 critical addition) */}
-                {voiceStage === 'transcript-review' && (
-                  <TranscriptReviewPanel
-                    transcript={transcript}
-                    language={detectedLanguage}
-                    confidence={transcriptConfidence}
-                    onTranscriptChange={setTranscript}
-                    onProceed={handleTranscriptProceed}
-                    onCancel={() => { setVoiceStage('idle'); setTranscript(''); }}
-                  />
-                )}
-
-                {/* Stage 3: Applying (generating from transcript) */}
-                {voiceStage === 'applying' && (
-                  <div className="p-3 bg-[#1a1a1a] sketched-border border-[#bf953f]/30 flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4 text-[#bf953f]" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    <span className="text-xs text-[#bf953f] font-bold">Generating invoice from transcript...</span>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* AI Change Diff Panel */}
-            {pendingChanges && invoice && (
-              <AIChangeDiff
-                currentInvoice={invoice}
-                proposedChanges={pendingChanges}
-                onApply={(accepted) => {
-                  onGenerate(accepted);
-                  setPendingChanges(null);
-                  setStreamingStage('idle');
-                  setVoiceStage('idle');
-                }}
-                onReject={() => {
-                  setPendingChanges(null);
-                  setStreamingStage('idle');
-                  setVoiceStage('idle');
-                }}
-              />
-            )}
+        {/* Recording controls */}
+        {voiceStage === 'idle' && (
+          <div className="text-center">
+            <p className="text-xs text-[#a09e91] font-serif italic mb-4">
+              Tap the mic and speak the invoice details. The transcript will appear for you to confirm.
+            </p>
+            <button
+              onClick={startRecording}
+              className="w-20 h-20 rounded-full bg-gradient-to-br from-[#bf953f] to-[#aa771c] text-[#0f1115] flex items-center justify-center mx-auto hover:from-[#fcf6ba] hover:to-[#bf953f] transition-all shadow-[0_0_30px_rgba(191,149,63,0.3)]"
+            >
+              <Mic className="w-8 h-8" />
+            </button>
           </div>
-        </div>
+        )}
 
-        <div className="space-y-3 mt-4">
-          {invoice && <AnalysisSuggestionCard invoice={invoice} />}
-          
-          <button onClick={handleRewriteNotes} disabled={isRewriting || !invoice?.notes} className="w-full text-left p-4 bg-[#1a1a1a] sketched-border border-[#bf953f]/30 hover:bg-[#bf953f]/10 hover:border-[#bf953f]/50 transition-all flex items-center gap-3 group disabled:opacity-50 shadow-[inset_0_0_15px_rgba(0,0,0,0.5)]">
-            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-[#bf953f] bg-gradient-to-br from-[#15171c] to-[#0f1115] sketched-border border-[#bf953f]/30 shadow-inner group-hover:scale-110 transition-transform">
-              {isRewriting ? <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> : <Languages className="w-5 h-5" />}
-            </div>
-            <div>
-              <div className="text-sm font-serif italic font-bold text-[#fcf6ba] group-hover:text-[#bf953f] transition-colors">Polish Notes (AI)</div>
-              <div className="text-[11px] font-serif italic text-[#a09e91] mt-0.5">Make notes professional</div>
-            </div>
-          </button>
+        {voiceStage === 'recording' && (
+          <div className="text-center">
+            <p className="text-xs text-[#a09e91] font-serif italic mb-4 animate-pulse">Recording… speak clearly</p>
+            {transcript && (
+              <p className="text-xs text-[#fcf6ba] font-serif italic mb-4 bg-[#15171c] p-3 rounded-xl border border-[#bf953f]/20">
+                {transcript}
+              </p>
+            )}
+            <button
+              onClick={stopRecording}
+              className="w-20 h-20 rounded-full bg-red-600 text-white flex items-center justify-center mx-auto hover:bg-red-500 transition-all shadow-[0_0_30px_rgba(220,38,38,0.3)]"
+            >
+              <Square className="w-8 h-8" />
+            </button>
+          </div>
+        )}
 
-          {/* B-07: Server-side audit button */}
-          <button onClick={handleAudit} disabled={isAuditing} className="w-full text-left p-4 bg-[#1a1a1a] sketched-border border-[#bf953f]/30 hover:bg-[#bf953f]/10 hover:border-[#bf953f]/50 transition-all flex items-center gap-3 group disabled:opacity-50 shadow-[inset_0_0_15px_rgba(0,0,0,0.5)]">
-            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-amber-500 bg-gradient-to-br from-[#15171c] to-[#0f1115] sketched-border border-amber-500/30 shadow-inner group-hover:scale-110 transition-transform">
-              {isAuditing ? <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> : <Shield className="w-5 h-5" />}
-            </div>
-            <div>
-              <div className="text-sm font-serif italic font-bold text-[#fcf6ba] group-hover:text-[#bf953f] transition-colors">Audit Compliance</div>
-              <div className="text-[11px] font-serif italic text-[#a09e91] mt-0.5">Server-side validation</div>
-            </div>
-          </button>
-          {auditMessage && <div className="p-3 mt-2 bg-[#1a1a1a] sketched-border border-amber-500/50 text-amber-400 text-xs font-serif italic">{auditMessage}</div>}
-          {auditIssues.length > 0 && (
-            <div className="space-y-1.5 mt-2">
-              {auditIssues.map((issue, i) => (
-                <div key={i} className={`p-3 sketched-border text-xs flex items-start gap-2 font-serif italic ${
-                  issue.severity === 'error' 
-                    ? 'bg-red-950/20 border border-red-900/50 text-red-400' 
-                    : 'bg-[#1a1a1a] border border-amber-500/30 text-amber-400'
-                }`}>
-                  <span className="font-serif font-bold text-[10px] opacity-60 flex-shrink-0 mt-0.5 uppercase tracking-widest">{issue.code}</span>
-                  <span>{issue.message}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {(voiceStage === 'transcribing' || voiceStage === 'applying') && (
+          <div className="text-center py-8">
+            <Loader2 className="w-8 h-8 text-[#bf953f] animate-spin mx-auto mb-3" />
+            <p className="text-xs text-[#a09e91] font-serif italic">
+              {voiceStage === 'transcribing' ? 'Transcribing…' : 'Generating invoice…'}
+            </p>
+          </div>
+        )}
 
+        {voiceStage === 'transcript-review' && (
+          <TranscriptReviewPanel
+            transcript={transcript}
+            language={detectedLanguage}
+            confidence={transcriptConfidence}
+            onTranscriptChange={setTranscript}
+            onProceed={handleTranscriptProceed}
+            onCancel={handleTranscriptCancel}
+          />
+        )}
       </div>
     </div>
   );
