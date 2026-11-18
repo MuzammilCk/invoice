@@ -4,11 +4,27 @@ dist/
 coverage/
 .DS_Store
 *.log
-.env*
+.env
 !.env.example
-models/
-invoice-qwen2.5-1.5b-q8_0/
+
+# TypeScript
+*.tsbuildinfo
+
+# Python artifacts
 __pycache__/
 *.pyc
 *.pyo
-*gguf
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Database
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Generated PDFs & temporary exports
+*.pdf
+generated/

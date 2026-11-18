@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - VTI_DATABASE_URL=sqlite:////app/data/invoice.db
+      - VTI_STATIC_DIR=/app/web/dist
+      - VTI_COOKIE_SECURE=${VTI_COOKIE_SECURE:-true}
+    volumes:
+      - invoice-data:/app/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  invoice-data:
+  caddy-data:
+  caddy-config:
