@@ -12,7 +12,11 @@ class Settings(BaseSettings):
     cookie_secure: bool = True  # Set to False in dev/test for HTTP
     debug: bool = False
 
-    model_config = {"env_prefix": "VTI_", "env_file": ".env"}
+    model_config = {
+        "env_prefix": "VTI_",
+        "env_file": ".env",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
