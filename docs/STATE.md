@@ -5,7 +5,7 @@
 | Slice | Title | Depends on | Status | Branch | Tag | Last verified |
 | --- | --- | --- | --- | --- | --- | --- |
 | S00 | Foundation | none | DONE | slice/S00-foundation | S00-done | 2026-11-18 |
-| S01 | Renderer engine | none | APPROVED | slice/S01-renderer-engine | | |
+| S01 | Renderer engine | none | BUILDING | slice/S01-renderer-engine | | |
 | S02 | Perception kernel | none | NOT_STARTED | | | |
 | S03 | Starting UI | S00, S01 | NOT_STARTED | | | |
 | S04 | Invoice core | S00, S01, S03 | NOT_STARTED | | | |
