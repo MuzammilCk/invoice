@@ -1,0 +1,44 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Illikkal Auditorium",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "no",
+      "label": "NO.",
+      "kind": "integer",
+      "align": "left"
+    },
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "no": "01",
+      "item": "Dual 18-inch Subwoofer Enclosure Low-Frequency Transducer Reconing, Alignment, and Voice Coil Rewinding with High-Temperature Kapton Former",
+      "rate": "\u20b98,500.00"
+    }
+  ],
+  "total_display": "\u20b98,500.00",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}

@@ -1,0 +1,1039 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Illikkal Auditorium",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "no",
+      "label": "NO.",
+      "kind": "integer",
+      "align": "left"
+    },
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "no": "01",
+      "item": "Standard Servicing Package #1",
+      "rate": "\u20b9150.00"
+    },
+    {
+      "no": "02",
+      "item": "Standard Servicing Package #2",
+      "rate": "\u20b9300.00"
+    },
+    {
+      "no": "03",
+      "item": "Standard Servicing Package #3",
+      "rate": "\u20b9450.00"
+    },
+    {
+      "no": "04",
+      "item": "Standard Servicing Package #4",
+      "rate": "\u20b9600.00"
+    },
+    {
+      "no": "05",
+      "item": "Standard Servicing Package #5",
+      "rate": "\u20b9750.00"
+    },
+    {
+      "no": "06",
+      "item": "Standard Servicing Package #6",
+      "rate": "\u20b9900.00"
+    },
+    {
+      "no": "07",
+      "item": "Standard Servicing Package #7",
+      "rate": "\u20b91050.00"
+    },
+    {
+      "no": "08",
+      "item": "Standard Servicing Package #8",
+      "rate": "\u20b91200.00"
+    },
+    {
+      "no": "09",
+      "item": "Standard Servicing Package #9",
+      "rate": "\u20b91350.00"
+    },
+    {
+      "no": "10",
+      "item": "Standard Servicing Package #10",
+      "rate": "\u20b91500.00"
+    },
+    {
+      "no": "11",
+      "item": "Standard Servicing Package #11",
+      "rate": "\u20b91650.00"
+    },
+    {
+      "no": "12",
+      "item": "Standard Servicing Package #12",
+      "rate": "\u20b91800.00"
+    },
+    {
+      "no": "13",
+      "item": "Standard Servicing Package #13",
+      "rate": "\u20b91950.00"
+    },
+    {
+      "no": "14",
+      "item": "Standard Servicing Package #14",
+      "rate": "\u20b92100.00"
+    },
+    {
+      "no": "15",
+      "item": "Standard Servicing Package #15",
+      "rate": "\u20b92250.00"
+    },
+    {
+      "no": "16",
+      "item": "Standard Servicing Package #16",
+      "rate": "\u20b92400.00"
+    },
+    {
+      "no": "17",
+      "item": "Standard Servicing Package #17",
+      "rate": "\u20b92550.00"
+    },
+    {
+      "no": "18",
+      "item": "Standard Servicing Package #18",
+      "rate": "\u20b92700.00"
+    },
+    {
+      "no": "19",
+      "item": "Standard Servicing Package #19",
+      "rate": "\u20b92850.00"
+    },
+    {
+      "no": "20",
+      "item": "Standard Servicing Package #20",
+      "rate": "\u20b93000.00"
+    },
+    {
+      "no": "21",
+      "item": "Standard Servicing Package #21",
+      "rate": "\u20b93150.00"
+    },
+    {
+      "no": "22",
+      "item": "Standard Servicing Package #22",
+      "rate": "\u20b93300.00"
+    },
+    {
+      "no": "23",
+      "item": "Standard Servicing Package #23",
+      "rate": "\u20b93450.00"
+    },
+    {
+      "no": "24",
+      "item": "Standard Servicing Package #24",
+      "rate": "\u20b93600.00"
+    },
+    {
+      "no": "25",
+      "item": "Standard Servicing Package #25",
+      "rate": "\u20b93750.00"
+    },
+    {
+      "no": "26",
+      "item": "Standard Servicing Package #26",
+      "rate": "\u20b93900.00"
+    },
+    {
+      "no": "27",
+      "item": "Standard Servicing Package #27",
+      "rate": "\u20b94050.00"
+    },
+    {
+      "no": "28",
+      "item": "Standard Servicing Package #28",
+      "rate": "\u20b94200.00"
+    },
+    {
+      "no": "29",
+      "item": "Standard Servicing Package #29",
+      "rate": "\u20b94350.00"
+    },
+    {
+      "no": "30",
+      "item": "Standard Servicing Package #30",
+      "rate": "\u20b94500.00"
+    },
+    {
+      "no": "31",
+      "item": "Standard Servicing Package #31",
+      "rate": "\u20b94650.00"
+    },
+    {
+      "no": "32",
+      "item": "Standard Servicing Package #32",
+      "rate": "\u20b94800.00"
+    },
+    {
+      "no": "33",
+      "item": "Standard Servicing Package #33",
+      "rate": "\u20b94950.00"
+    },
+    {
+      "no": "34",
+      "item": "Standard Servicing Package #34",
+      "rate": "\u20b95100.00"
+    },
+    {
+      "no": "35",
+      "item": "Standard Servicing Package #35",
+      "rate": "\u20b95250.00"
+    },
+    {
+      "no": "36",
+      "item": "Standard Servicing Package #36",
+      "rate": "\u20b95400.00"
+    },
+    {
+      "no": "37",
+      "item": "Standard Servicing Package #37",
+      "rate": "\u20b95550.00"
+    },
+    {
+      "no": "38",
+      "item": "Standard Servicing Package #38",
+      "rate": "\u20b95700.00"
+    },
+    {
+      "no": "39",
+      "item": "Standard Servicing Package #39",
+      "rate": "\u20b95850.00"
+    },
+    {
+      "no": "40",
+      "item": "Standard Servicing Package #40",
+      "rate": "\u20b96000.00"
+    },
+    {
+      "no": "41",
+      "item": "Standard Servicing Package #41",
+      "rate": "\u20b96150.00"
+    },
+    {
+      "no": "42",
+      "item": "Standard Servicing Package #42",
+      "rate": "\u20b96300.00"
+    },
+    {
+      "no": "43",
+      "item": "Standard Servicing Package #43",
+      "rate": "\u20b96450.00"
+    },
+    {
+      "no": "44",
+      "item": "Standard Servicing Package #44",
+      "rate": "\u20b96600.00"
+    },
+    {
+      "no": "45",
+      "item": "Standard Servicing Package #45",
+      "rate": "\u20b96750.00"
+    },
+    {
+      "no": "46",
+      "item": "Standard Servicing Package #46",
+      "rate": "\u20b96900.00"
+    },
+    {
+      "no": "47",
+      "item": "Standard Servicing Package #47",
+      "rate": "\u20b97050.00"
+    },
+    {
+      "no": "48",
+      "item": "Standard Servicing Package #48",
+      "rate": "\u20b97200.00"
+    },
+    {
+      "no": "49",
+      "item": "Standard Servicing Package #49",
+      "rate": "\u20b97350.00"
+    },
+    {
+      "no": "50",
+      "item": "Standard Servicing Package #50",
+      "rate": "\u20b97500.00"
+    },
+    {
+      "no": "51",
+      "item": "Standard Servicing Package #51",
+      "rate": "\u20b97650.00"
+    },
+    {
+      "no": "52",
+      "item": "Standard Servicing Package #52",
+      "rate": "\u20b97800.00"
+    },
+    {
+      "no": "53",
+      "item": "Standard Servicing Package #53",
+      "rate": "\u20b97950.00"
+    },
+    {
+      "no": "54",
+      "item": "Standard Servicing Package #54",
+      "rate": "\u20b98100.00"
+    },
+    {
+      "no": "55",
+      "item": "Standard Servicing Package #55",
+      "rate": "\u20b98250.00"
+    },
+    {
+      "no": "56",
+      "item": "Standard Servicing Package #56",
+      "rate": "\u20b98400.00"
+    },
+    {
+      "no": "57",
+      "item": "Standard Servicing Package #57",
+      "rate": "\u20b98550.00"
+    },
+    {
+      "no": "58",
+      "item": "Standard Servicing Package #58",
+      "rate": "\u20b98700.00"
+    },
+    {
+      "no": "59",
+      "item": "Standard Servicing Package #59",
+      "rate": "\u20b98850.00"
+    },
+    {
+      "no": "60",
+      "item": "Standard Servicing Package #60",
+      "rate": "\u20b99000.00"
+    },
+    {
+      "no": "61",
+      "item": "Standard Servicing Package #61",
+      "rate": "\u20b99150.00"
+    },
+    {
+      "no": "62",
+      "item": "Standard Servicing Package #62",
+      "rate": "\u20b99300.00"
+    },
+    {
+      "no": "63",
+      "item": "Standard Servicing Package #63",
+      "rate": "\u20b99450.00"
+    },
+    {
+      "no": "64",
+      "item": "Standard Servicing Package #64",
+      "rate": "\u20b99600.00"
+    },
+    {
+      "no": "65",
+      "item": "Standard Servicing Package #65",
+      "rate": "\u20b99750.00"
+    },
+    {
+      "no": "66",
+      "item": "Standard Servicing Package #66",
+      "rate": "\u20b99900.00"
+    },
+    {
+      "no": "67",
+      "item": "Standard Servicing Package #67",
+      "rate": "\u20b910050.00"
+    },
+    {
+      "no": "68",
+      "item": "Standard Servicing Package #68",
+      "rate": "\u20b910200.00"
+    },
+    {
+      "no": "69",
+      "item": "Standard Servicing Package #69",
+      "rate": "\u20b910350.00"
+    },
+    {
+      "no": "70",
+      "item": "Standard Servicing Package #70",
+      "rate": "\u20b910500.00"
+    },
+    {
+      "no": "71",
+      "item": "Standard Servicing Package #71",
+      "rate": "\u20b910650.00"
+    },
+    {
+      "no": "72",
+      "item": "Standard Servicing Package #72",
+      "rate": "\u20b910800.00"
+    },
+    {
+      "no": "73",
+      "item": "Standard Servicing Package #73",
+      "rate": "\u20b910950.00"
+    },
+    {
+      "no": "74",
+      "item": "Standard Servicing Package #74",
+      "rate": "\u20b911100.00"
+    },
+    {
+      "no": "75",
+      "item": "Standard Servicing Package #75",
+      "rate": "\u20b911250.00"
+    },
+    {
+      "no": "76",
+      "item": "Standard Servicing Package #76",
+      "rate": "\u20b911400.00"
+    },
+    {
+      "no": "77",
+      "item": "Standard Servicing Package #77",
+      "rate": "\u20b911550.00"
+    },
+    {
+      "no": "78",
+      "item": "Standard Servicing Package #78",
+      "rate": "\u20b911700.00"
+    },
+    {
+      "no": "79",
+      "item": "Standard Servicing Package #79",
+      "rate": "\u20b911850.00"
+    },
+    {
+      "no": "80",
+      "item": "Standard Servicing Package #80",
+      "rate": "\u20b912000.00"
+    },
+    {
+      "no": "81",
+      "item": "Standard Servicing Package #81",
+      "rate": "\u20b912150.00"
+    },
+    {
+      "no": "82",
+      "item": "Standard Servicing Package #82",
+      "rate": "\u20b912300.00"
+    },
+    {
+      "no": "83",
+      "item": "Standard Servicing Package #83",
+      "rate": "\u20b912450.00"
+    },
+    {
+      "no": "84",
+      "item": "Standard Servicing Package #84",
+      "rate": "\u20b912600.00"
+    },
+    {
+      "no": "85",
+      "item": "Standard Servicing Package #85",
+      "rate": "\u20b912750.00"
+    },
+    {
+      "no": "86",
+      "item": "Standard Servicing Package #86",
+      "rate": "\u20b912900.00"
+    },
+    {
+      "no": "87",
+      "item": "Standard Servicing Package #87",
+      "rate": "\u20b913050.00"
+    },
+    {
+      "no": "88",
+      "item": "Standard Servicing Package #88",
+      "rate": "\u20b913200.00"
+    },
+    {
+      "no": "89",
+      "item": "Standard Servicing Package #89",
+      "rate": "\u20b913350.00"
+    },
+    {
+      "no": "90",
+      "item": "Standard Servicing Package #90",
+      "rate": "\u20b913500.00"
+    },
+    {
+      "no": "91",
+      "item": "Standard Servicing Package #91",
+      "rate": "\u20b913650.00"
+    },
+    {
+      "no": "92",
+      "item": "Standard Servicing Package #92",
+      "rate": "\u20b913800.00"
+    },
+    {
+      "no": "93",
+      "item": "Standard Servicing Package #93",
+      "rate": "\u20b913950.00"
+    },
+    {
+      "no": "94",
+      "item": "Standard Servicing Package #94",
+      "rate": "\u20b914100.00"
+    },
+    {
+      "no": "95",
+      "item": "Standard Servicing Package #95",
+      "rate": "\u20b914250.00"
+    },
+    {
+      "no": "96",
+      "item": "Standard Servicing Package #96",
+      "rate": "\u20b914400.00"
+    },
+    {
+      "no": "97",
+      "item": "Standard Servicing Package #97",
+      "rate": "\u20b914550.00"
+    },
+    {
+      "no": "98",
+      "item": "Standard Servicing Package #98",
+      "rate": "\u20b914700.00"
+    },
+    {
+      "no": "99",
+      "item": "Standard Servicing Package #99",
+      "rate": "\u20b914850.00"
+    },
+    {
+      "no": "100",
+      "item": "Standard Servicing Package #100",
+      "rate": "\u20b915000.00"
+    },
+    {
+      "no": "101",
+      "item": "Standard Servicing Package #101",
+      "rate": "\u20b915150.00"
+    },
+    {
+      "no": "102",
+      "item": "Standard Servicing Package #102",
+      "rate": "\u20b915300.00"
+    },
+    {
+      "no": "103",
+      "item": "Standard Servicing Package #103",
+      "rate": "\u20b915450.00"
+    },
+    {
+      "no": "104",
+      "item": "Standard Servicing Package #104",
+      "rate": "\u20b915600.00"
+    },
+    {
+      "no": "105",
+      "item": "Standard Servicing Package #105",
+      "rate": "\u20b915750.00"
+    },
+    {
+      "no": "106",
+      "item": "Standard Servicing Package #106",
+      "rate": "\u20b915900.00"
+    },
+    {
+      "no": "107",
+      "item": "Standard Servicing Package #107",
+      "rate": "\u20b916050.00"
+    },
+    {
+      "no": "108",
+      "item": "Standard Servicing Package #108",
+      "rate": "\u20b916200.00"
+    },
+    {
+      "no": "109",
+      "item": "Standard Servicing Package #109",
+      "rate": "\u20b916350.00"
+    },
+    {
+      "no": "110",
+      "item": "Standard Servicing Package #110",
+      "rate": "\u20b916500.00"
+    },
+    {
+      "no": "111",
+      "item": "Standard Servicing Package #111",
+      "rate": "\u20b916650.00"
+    },
+    {
+      "no": "112",
+      "item": "Standard Servicing Package #112",
+      "rate": "\u20b916800.00"
+    },
+    {
+      "no": "113",
+      "item": "Standard Servicing Package #113",
+      "rate": "\u20b916950.00"
+    },
+    {
+      "no": "114",
+      "item": "Standard Servicing Package #114",
+      "rate": "\u20b917100.00"
+    },
+    {
+      "no": "115",
+      "item": "Standard Servicing Package #115",
+      "rate": "\u20b917250.00"
+    },
+    {
+      "no": "116",
+      "item": "Standard Servicing Package #116",
+      "rate": "\u20b917400.00"
+    },
+    {
+      "no": "117",
+      "item": "Standard Servicing Package #117",
+      "rate": "\u20b917550.00"
+    },
+    {
+      "no": "118",
+      "item": "Standard Servicing Package #118",
+      "rate": "\u20b917700.00"
+    },
+    {
+      "no": "119",
+      "item": "Standard Servicing Package #119",
+      "rate": "\u20b917850.00"
+    },
+    {
+      "no": "120",
+      "item": "Standard Servicing Package #120",
+      "rate": "\u20b918000.00"
+    },
+    {
+      "no": "121",
+      "item": "Standard Servicing Package #121",
+      "rate": "\u20b918150.00"
+    },
+    {
+      "no": "122",
+      "item": "Standard Servicing Package #122",
+      "rate": "\u20b918300.00"
+    },
+    {
+      "no": "123",
+      "item": "Standard Servicing Package #123",
+      "rate": "\u20b918450.00"
+    },
+    {
+      "no": "124",
+      "item": "Standard Servicing Package #124",
+      "rate": "\u20b918600.00"
+    },
+    {
+      "no": "125",
+      "item": "Standard Servicing Package #125",
+      "rate": "\u20b918750.00"
+    },
+    {
+      "no": "126",
+      "item": "Standard Servicing Package #126",
+      "rate": "\u20b918900.00"
+    },
+    {
+      "no": "127",
+      "item": "Standard Servicing Package #127",
+      "rate": "\u20b919050.00"
+    },
+    {
+      "no": "128",
+      "item": "Standard Servicing Package #128",
+      "rate": "\u20b919200.00"
+    },
+    {
+      "no": "129",
+      "item": "Standard Servicing Package #129",
+      "rate": "\u20b919350.00"
+    },
+    {
+      "no": "130",
+      "item": "Standard Servicing Package #130",
+      "rate": "\u20b919500.00"
+    },
+    {
+      "no": "131",
+      "item": "Standard Servicing Package #131",
+      "rate": "\u20b919650.00"
+    },
+    {
+      "no": "132",
+      "item": "Standard Servicing Package #132",
+      "rate": "\u20b919800.00"
+    },
+    {
+      "no": "133",
+      "item": "Standard Servicing Package #133",
+      "rate": "\u20b919950.00"
+    },
+    {
+      "no": "134",
+      "item": "Standard Servicing Package #134",
+      "rate": "\u20b920100.00"
+    },
+    {
+      "no": "135",
+      "item": "Standard Servicing Package #135",
+      "rate": "\u20b920250.00"
+    },
+    {
+      "no": "136",
+      "item": "Standard Servicing Package #136",
+      "rate": "\u20b920400.00"
+    },
+    {
+      "no": "137",
+      "item": "Standard Servicing Package #137",
+      "rate": "\u20b920550.00"
+    },
+    {
+      "no": "138",
+      "item": "Standard Servicing Package #138",
+      "rate": "\u20b920700.00"
+    },
+    {
+      "no": "139",
+      "item": "Standard Servicing Package #139",
+      "rate": "\u20b920850.00"
+    },
+    {
+      "no": "140",
+      "item": "Standard Servicing Package #140",
+      "rate": "\u20b921000.00"
+    },
+    {
+      "no": "141",
+      "item": "Standard Servicing Package #141",
+      "rate": "\u20b921150.00"
+    },
+    {
+      "no": "142",
+      "item": "Standard Servicing Package #142",
+      "rate": "\u20b921300.00"
+    },
+    {
+      "no": "143",
+      "item": "Standard Servicing Package #143",
+      "rate": "\u20b921450.00"
+    },
+    {
+      "no": "144",
+      "item": "Standard Servicing Package #144",
+      "rate": "\u20b921600.00"
+    },
+    {
+      "no": "145",
+      "item": "Standard Servicing Package #145",
+      "rate": "\u20b921750.00"
+    },
+    {
+      "no": "146",
+      "item": "Standard Servicing Package #146",
+      "rate": "\u20b921900.00"
+    },
+    {
+      "no": "147",
+      "item": "Standard Servicing Package #147",
+      "rate": "\u20b922050.00"
+    },
+    {
+      "no": "148",
+      "item": "Standard Servicing Package #148",
+      "rate": "\u20b922200.00"
+    },
+    {
+      "no": "149",
+      "item": "Standard Servicing Package #149",
+      "rate": "\u20b922350.00"
+    },
+    {
+      "no": "150",
+      "item": "Standard Servicing Package #150",
+      "rate": "\u20b922500.00"
+    },
+    {
+      "no": "151",
+      "item": "Standard Servicing Package #151",
+      "rate": "\u20b922650.00"
+    },
+    {
+      "no": "152",
+      "item": "Standard Servicing Package #152",
+      "rate": "\u20b922800.00"
+    },
+    {
+      "no": "153",
+      "item": "Standard Servicing Package #153",
+      "rate": "\u20b922950.00"
+    },
+    {
+      "no": "154",
+      "item": "Standard Servicing Package #154",
+      "rate": "\u20b923100.00"
+    },
+    {
+      "no": "155",
+      "item": "Standard Servicing Package #155",
+      "rate": "\u20b923250.00"
+    },
+    {
+      "no": "156",
+      "item": "Standard Servicing Package #156",
+      "rate": "\u20b923400.00"
+    },
+    {
+      "no": "157",
+      "item": "Standard Servicing Package #157",
+      "rate": "\u20b923550.00"
+    },
+    {
+      "no": "158",
+      "item": "Standard Servicing Package #158",
+      "rate": "\u20b923700.00"
+    },
+    {
+      "no": "159",
+      "item": "Standard Servicing Package #159",
+      "rate": "\u20b923850.00"
+    },
+    {
+      "no": "160",
+      "item": "Standard Servicing Package #160",
+      "rate": "\u20b924000.00"
+    },
+    {
+      "no": "161",
+      "item": "Standard Servicing Package #161",
+      "rate": "\u20b924150.00"
+    },
+    {
+      "no": "162",
+      "item": "Standard Servicing Package #162",
+      "rate": "\u20b924300.00"
+    },
+    {
+      "no": "163",
+      "item": "Standard Servicing Package #163",
+      "rate": "\u20b924450.00"
+    },
+    {
+      "no": "164",
+      "item": "Standard Servicing Package #164",
+      "rate": "\u20b924600.00"
+    },
+    {
+      "no": "165",
+      "item": "Standard Servicing Package #165",
+      "rate": "\u20b924750.00"
+    },
+    {
+      "no": "166",
+      "item": "Standard Servicing Package #166",
+      "rate": "\u20b924900.00"
+    },
+    {
+      "no": "167",
+      "item": "Standard Servicing Package #167",
+      "rate": "\u20b925050.00"
+    },
+    {
+      "no": "168",
+      "item": "Standard Servicing Package #168",
+      "rate": "\u20b925200.00"
+    },
+    {
+      "no": "169",
+      "item": "Standard Servicing Package #169",
+      "rate": "\u20b925350.00"
+    },
+    {
+      "no": "170",
+      "item": "Standard Servicing Package #170",
+      "rate": "\u20b925500.00"
+    },
+    {
+      "no": "171",
+      "item": "Standard Servicing Package #171",
+      "rate": "\u20b925650.00"
+    },
+    {
+      "no": "172",
+      "item": "Standard Servicing Package #172",
+      "rate": "\u20b925800.00"
+    },
+    {
+      "no": "173",
+      "item": "Standard Servicing Package #173",
+      "rate": "\u20b925950.00"
+    },
+    {
+      "no": "174",
+      "item": "Standard Servicing Package #174",
+      "rate": "\u20b926100.00"
+    },
+    {
+      "no": "175",
+      "item": "Standard Servicing Package #175",
+      "rate": "\u20b926250.00"
+    },
+    {
+      "no": "176",
+      "item": "Standard Servicing Package #176",
+      "rate": "\u20b926400.00"
+    },
+    {
+      "no": "177",
+      "item": "Standard Servicing Package #177",
+      "rate": "\u20b926550.00"
+    },
+    {
+      "no": "178",
+      "item": "Standard Servicing Package #178",
+      "rate": "\u20b926700.00"
+    },
+    {
+      "no": "179",
+      "item": "Standard Servicing Package #179",
+      "rate": "\u20b926850.00"
+    },
+    {
+      "no": "180",
+      "item": "Standard Servicing Package #180",
+      "rate": "\u20b927000.00"
+    },
+    {
+      "no": "181",
+      "item": "Standard Servicing Package #181",
+      "rate": "\u20b927150.00"
+    },
+    {
+      "no": "182",
+      "item": "Standard Servicing Package #182",
+      "rate": "\u20b927300.00"
+    },
+    {
+      "no": "183",
+      "item": "Standard Servicing Package #183",
+      "rate": "\u20b927450.00"
+    },
+    {
+      "no": "184",
+      "item": "Standard Servicing Package #184",
+      "rate": "\u20b927600.00"
+    },
+    {
+      "no": "185",
+      "item": "Standard Servicing Package #185",
+      "rate": "\u20b927750.00"
+    },
+    {
+      "no": "186",
+      "item": "Standard Servicing Package #186",
+      "rate": "\u20b927900.00"
+    },
+    {
+      "no": "187",
+      "item": "Standard Servicing Package #187",
+      "rate": "\u20b928050.00"
+    },
+    {
+      "no": "188",
+      "item": "Standard Servicing Package #188",
+      "rate": "\u20b928200.00"
+    },
+    {
+      "no": "189",
+      "item": "Standard Servicing Package #189",
+      "rate": "\u20b928350.00"
+    },
+    {
+      "no": "190",
+      "item": "Standard Servicing Package #190",
+      "rate": "\u20b928500.00"
+    },
+    {
+      "no": "191",
+      "item": "Standard Servicing Package #191",
+      "rate": "\u20b928650.00"
+    },
+    {
+      "no": "192",
+      "item": "Standard Servicing Package #192",
+      "rate": "\u20b928800.00"
+    },
+    {
+      "no": "193",
+      "item": "Standard Servicing Package #193",
+      "rate": "\u20b928950.00"
+    },
+    {
+      "no": "194",
+      "item": "Standard Servicing Package #194",
+      "rate": "\u20b929100.00"
+    },
+    {
+      "no": "195",
+      "item": "Standard Servicing Package #195",
+      "rate": "\u20b929250.00"
+    },
+    {
+      "no": "196",
+      "item": "Standard Servicing Package #196",
+      "rate": "\u20b929400.00"
+    },
+    {
+      "no": "197",
+      "item": "Standard Servicing Package #197",
+      "rate": "\u20b929550.00"
+    },
+    {
+      "no": "198",
+      "item": "Standard Servicing Package #198",
+      "rate": "\u20b929700.00"
+    },
+    {
+      "no": "199",
+      "item": "Standard Servicing Package #199",
+      "rate": "\u20b929850.00"
+    },
+    {
+      "no": "200",
+      "item": "Standard Servicing Package #200",
+      "rate": "\u20b930000.00"
+    }
+  ],
+  "total_display": "\u20b93,015,000.00",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}

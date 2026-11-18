@@ -1,0 +1,44 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Illikkal Auditorium",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "no",
+      "label": "NO.",
+      "kind": "integer",
+      "align": "left"
+    },
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "no": "01",
+      "item": "Stadium Concert Line Array Rig",
+      "rate": "\u20b91,23,45,678.50"
+    }
+  ],
+  "total_display": "\u20b91,23,45,678.50",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}
