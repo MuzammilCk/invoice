@@ -1,11 +1,12 @@
 # S02: Perception kernel — Status
 
-## State: PLANNED
+## State: BUILDING
 
 ## Baseline Results
-- Branch: `slice/S02-perception-kernel` (to be created from `main`)
-- Baseline commit: `a5c8334273e8613a82f5257fb4299d6c5c7c8bdc` (S01: Renderer engine)
-- Existing tests: S00 and S01 tests green on main
+- Branch: `slice/S02-perception-kernel`
+- Baseline commit: `8d0405ff42a2911ca41a7b7beb9c7fcddb12f010` (S02/plan: control files)
+- Existing tests: S00 and S01 tests green (22 passed in renderer contracts, S00 auth/db clean)
+- Lint & Type check: clean
 
 ## Task Checklist
 - [ ] T1: Contracts & Proposal Data Models (`contracts/proposal.py`, `contracts/__init__.py`)
@@ -25,8 +26,9 @@
 (none)
 
 ## Questions Log
-- Q1: Should the 30-phrase demo script live under `services/api/app/perception/demo.py` (runnable via `python -m app.perception.demo`) to strictly respect S02's Owns scope, or at `scripts/demo_s02.py`? (Recommended: `services/api/app/perception/demo.py` with a thin runner script if desired).
-- Q2: In S02 build phase, should we add `rapidfuzz>=3.0.0` directly to `services/api/pyproject.toml` dependencies? (Recommended: Yes, since BP 6.4 explicitly mandates RapidFuzz for token set matching).
+- Q1: Should the 30-phrase demo script live under `services/api/app/perception/demo.py` (runnable via `python -m app.perception.demo`) to strictly respect S02's Owns scope, or at `scripts/demo_s02.py`? -> Resolved: `services/api/app/perception/demo.py`.
+- Q2: In S02 build phase, should we add `rapidfuzz>=3.0.0` directly to `services/api/pyproject.toml` dependencies? -> Resolved: Yes, add to `services/api/pyproject.toml`.
+- Q3: How should backend unit/property tests for S02 be run? -> Resolved: Run with pytest using dev dependencies, maintaining unittest as fallback.
 
 ## Handoff
 (filled at close)
