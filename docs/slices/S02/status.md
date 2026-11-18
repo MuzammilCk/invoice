@@ -9,7 +9,7 @@
 - Lint & Type check: clean
 
 ## Task Checklist
-- [ ] T1: Contracts & Proposal Data Models (`contracts/proposal.py`, `contracts/__init__.py`)
+- [x] T1: Contracts & Proposal Data Models (`contracts/proposal.py`, `contracts/__init__.py`)
 - [ ] T2: Number Parser, Fractions & Indian Words (`services/api/app/perception/number.py`, `words.py`)
 - [ ] T3: Text Normalizer & RapidFuzz Matcher (`services/api/app/perception/normalizer.py`, `matcher.py`)
 - [ ] T4: Date Parser & Timezone Handling (`services/api/app/perception/date.py`)
