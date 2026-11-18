@@ -8,6 +8,10 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+# Set test environment before importing app modules
+os.environ["VTI_COOKIE_SECURE"] = "false"
+os.environ["VTI_DATABASE_URL"] = "sqlite:///test.db"
+
 from app.db import Base, get_db
 from app.main import create_app
 from app.models import Workspace  # noqa: F401 — register models

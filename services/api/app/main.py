@@ -23,9 +23,11 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, generic_exception_handler)
 
     # Routers
+    from app.auth.router import router as auth_router
     from app.routes.health import router as health_router
 
     app.include_router(health_router)
+    app.include_router(auth_router)
 
     return app
 
