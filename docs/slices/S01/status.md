@@ -1,6 +1,6 @@
 # S01: Renderer engine — Status
 
-## State: PLANNED
+## State: APPROVED
 
 ## Baseline Results
 - Branch: `slice/S01-renderer-engine`
@@ -18,7 +18,8 @@
 - [ ] T7: CLI & Performance Benchmarks (`renderer/cli.py`, `renderer/__main__.py`, `renderer/tests/test_perf.py`)
 
 ## Decisions Log
-- None yet.
+- Adopt Design 1 tokens into `renderer/skins/design1.py` and leave candidate script untouched as raw prototype.
+- Install `reportlab` and `pymupdf` into the active Python environment to support both test suite and CLI execution.
 
 ## Deviations Log
 - None yet.
