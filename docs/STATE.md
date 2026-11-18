@@ -4,7 +4,7 @@
 
 | Slice | Title | Depends on | Status | Branch | Tag | Last verified |
 | --- | --- | --- | --- | --- | --- | --- |
-| S00 | Foundation | none | PLANNED | | | |
+| S00 | Foundation | none | APPROVED | slice/S00-foundation | | |
 | S01 | Renderer engine | none | NOT_STARTED | | | |
 | S02 | Perception kernel | none | NOT_STARTED | | | |
 | S03 | Starting UI | S00, S01 | NOT_STARTED | | | |
