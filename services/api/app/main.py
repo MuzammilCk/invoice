@@ -29,6 +29,28 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
 
+    # Static / SPA serving if static_dir is provided
+    import os
+
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    static_dir = settings.static_dir or os.environ.get("VTI_STATIC_DIR")
+    if static_dir and os.path.isdir(static_dir):
+        assets_dir = os.path.join(static_dir, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            file_path = os.path.join(static_dir, full_path)
+            if full_path and os.path.isfile(file_path):
+                return FileResponse(file_path)
+            index_path = os.path.join(static_dir, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+            return FileResponse(file_path)
+
     return app
 
 

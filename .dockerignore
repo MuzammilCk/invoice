@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+apps/web/node_modules
+apps/web/dist
+__pycache__
+*.pyc
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/files/*
+!data/files/.gitkeep

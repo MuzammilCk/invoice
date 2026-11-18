@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     session_max_age_seconds: int = 60 * 60 * 24 * 30  # 30 days
     cors_origins: list[str] = ["http://localhost:5173"]
     cookie_secure: bool = True  # Set to False in dev/test for HTTP
+    static_dir: str | None = None
     debug: bool = False
 
     model_config = {

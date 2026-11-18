@@ -13,6 +13,13 @@ class Base(DeclarativeBase):
     """Base class for all ORM models."""
 
 
+# Ensure parent directory exists for SQLite
+if settings.database_url.startswith("sqlite:///"):
+    import os
+    sqlite_path = settings.database_url.removeprefix("sqlite:///")
+    if sqlite_path and sqlite_path != ":memory:":
+        os.makedirs(os.path.dirname(os.path.abspath(sqlite_path)), exist_ok=True)
+
 engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False},
