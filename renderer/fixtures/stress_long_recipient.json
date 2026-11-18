@@ -1,0 +1,44 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Kottakkal Arya Vaidya Sala Charitable Hospital & Research Centre Auditorium Main",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "no",
+      "label": "NO.",
+      "kind": "integer",
+      "align": "left"
+    },
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "no": "01",
+      "item": "Standard Servicing Package #1",
+      "rate": "\u20b9150.00"
+    }
+  ],
+  "total_display": "\u20b9150.00",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}

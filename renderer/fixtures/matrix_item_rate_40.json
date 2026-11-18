@@ -1,0 +1,196 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [
+      "Chettiyamkinar, Kottakkal, Malappuram, Kerala",
+      "9995880059  \u00b7  9633334786"
+    ],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Illikkal Auditorium",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "item": "Standard Servicing Package #1",
+      "rate": "\u20b9150.00"
+    },
+    {
+      "item": "Standard Servicing Package #2",
+      "rate": "\u20b9300.00"
+    },
+    {
+      "item": "Standard Servicing Package #3",
+      "rate": "\u20b9450.00"
+    },
+    {
+      "item": "Standard Servicing Package #4",
+      "rate": "\u20b9600.00"
+    },
+    {
+      "item": "Standard Servicing Package #5",
+      "rate": "\u20b9750.00"
+    },
+    {
+      "item": "Standard Servicing Package #6",
+      "rate": "\u20b9900.00"
+    },
+    {
+      "item": "Standard Servicing Package #7",
+      "rate": "\u20b91050.00"
+    },
+    {
+      "item": "Standard Servicing Package #8",
+      "rate": "\u20b91200.00"
+    },
+    {
+      "item": "Standard Servicing Package #9",
+      "rate": "\u20b91350.00"
+    },
+    {
+      "item": "Standard Servicing Package #10",
+      "rate": "\u20b91500.00"
+    },
+    {
+      "item": "Standard Servicing Package #11",
+      "rate": "\u20b91650.00"
+    },
+    {
+      "item": "Standard Servicing Package #12",
+      "rate": "\u20b91800.00"
+    },
+    {
+      "item": "Standard Servicing Package #13",
+      "rate": "\u20b91950.00"
+    },
+    {
+      "item": "Standard Servicing Package #14",
+      "rate": "\u20b92100.00"
+    },
+    {
+      "item": "Standard Servicing Package #15",
+      "rate": "\u20b92250.00"
+    },
+    {
+      "item": "Standard Servicing Package #16",
+      "rate": "\u20b92400.00"
+    },
+    {
+      "item": "Standard Servicing Package #17",
+      "rate": "\u20b92550.00"
+    },
+    {
+      "item": "Standard Servicing Package #18",
+      "rate": "\u20b92700.00"
+    },
+    {
+      "item": "Standard Servicing Package #19",
+      "rate": "\u20b92850.00"
+    },
+    {
+      "item": "Standard Servicing Package #20",
+      "rate": "\u20b93000.00"
+    },
+    {
+      "item": "Standard Servicing Package #21",
+      "rate": "\u20b93150.00"
+    },
+    {
+      "item": "Standard Servicing Package #22",
+      "rate": "\u20b93300.00"
+    },
+    {
+      "item": "Standard Servicing Package #23",
+      "rate": "\u20b93450.00"
+    },
+    {
+      "item": "Standard Servicing Package #24",
+      "rate": "\u20b93600.00"
+    },
+    {
+      "item": "Standard Servicing Package #25",
+      "rate": "\u20b93750.00"
+    },
+    {
+      "item": "Standard Servicing Package #26",
+      "rate": "\u20b93900.00"
+    },
+    {
+      "item": "Standard Servicing Package #27",
+      "rate": "\u20b94050.00"
+    },
+    {
+      "item": "Standard Servicing Package #28",
+      "rate": "\u20b94200.00"
+    },
+    {
+      "item": "Standard Servicing Package #29",
+      "rate": "\u20b94350.00"
+    },
+    {
+      "item": "Standard Servicing Package #30",
+      "rate": "\u20b94500.00"
+    },
+    {
+      "item": "Standard Servicing Package #31",
+      "rate": "\u20b94650.00"
+    },
+    {
+      "item": "Standard Servicing Package #32",
+      "rate": "\u20b94800.00"
+    },
+    {
+      "item": "Standard Servicing Package #33",
+      "rate": "\u20b94950.00"
+    },
+    {
+      "item": "Standard Servicing Package #34",
+      "rate": "\u20b95100.00"
+    },
+    {
+      "item": "Standard Servicing Package #35",
+      "rate": "\u20b95250.00"
+    },
+    {
+      "item": "Standard Servicing Package #36",
+      "rate": "\u20b95400.00"
+    },
+    {
+      "item": "Standard Servicing Package #37",
+      "rate": "\u20b95550.00"
+    },
+    {
+      "item": "Standard Servicing Package #38",
+      "rate": "\u20b95700.00"
+    },
+    {
+      "item": "Standard Servicing Package #39",
+      "rate": "\u20b95850.00"
+    },
+    {
+      "item": "Standard Servicing Package #40",
+      "rate": "\u20b96000.00"
+    }
+  ],
+  "total_display": "\u20b9123,000.00",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}

@@ -1,0 +1,68 @@
+{
+  "business": {
+    "name": "VIVA ELECTRONICS",
+    "lines": [
+      "Chettiyamkinar, Kottakkal, Malappuram, Kerala",
+      "9995880059  \u00b7  9633334786"
+    ],
+    "phones": []
+  },
+  "date_display": "10 November 2026",
+  "billed_to": "Illikkal Auditorium",
+  "labels": {
+    "billed_to": "BILLED TO",
+    "date": "DATE",
+    "total": "TOTAL"
+  },
+  "columns": [
+    {
+      "id": "item",
+      "label": "ITEM",
+      "kind": "text",
+      "align": "left"
+    },
+    {
+      "id": "rate",
+      "label": "RATE",
+      "kind": "number",
+      "align": "right"
+    }
+  ],
+  "rows": [
+    {
+      "item": "Standard Servicing Package #1",
+      "rate": "\u20b9150.00"
+    },
+    {
+      "item": "Standard Servicing Package #2",
+      "rate": "\u20b9300.00"
+    },
+    {
+      "item": "Standard Servicing Package #3",
+      "rate": "\u20b9450.00"
+    },
+    {
+      "item": "Standard Servicing Package #4",
+      "rate": "\u20b9600.00"
+    },
+    {
+      "item": "Standard Servicing Package #5",
+      "rate": "\u20b9750.00"
+    },
+    {
+      "item": "Standard Servicing Package #6",
+      "rate": "\u20b9900.00"
+    },
+    {
+      "item": "Standard Servicing Package #7",
+      "rate": "\u20b91050.00"
+    },
+    {
+      "item": "Standard Servicing Package #8",
+      "rate": "\u20b91200.00"
+    }
+  ],
+  "total_display": "\u20b95,400.00",
+  "footer": "Thank you for your business.",
+  "currency": "\u20b9"
+}
