@@ -12,7 +12,7 @@
 - [x] T1: Contracts & Proposal Data Models (`contracts/proposal.py`, `contracts/__init__.py`)
 - [x] T2: Number Parser, Fractions & Indian Words (`services/api/app/perception/number.py`, `words.py`)
 - [x] T3: Text Normalizer & RapidFuzz Matcher (`services/api/app/perception/normalizer.py`, `matcher.py`)
-- [ ] T4: Date Parser & Timezone Handling (`services/api/app/perception/date.py`)
+- [x] T4: Date Parser & Timezone Handling (`services/api/app/perception/date.py`)
 - [ ] T5: Domain & Perception Checks Engine (`services/api/app/perception/checks.py`)
 - [ ] T6: Lexicon & Proposal Builder Pipeline [Stop Point: Owner review] (`services/api/app/perception/lexicon.py`, `builder.py`)
 - [ ] T7: Fake Perception Kernel (`contracts/fakes/perception.py`)
