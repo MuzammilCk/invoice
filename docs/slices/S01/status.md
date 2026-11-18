@@ -1,6 +1,6 @@
 # S01: Renderer engine — Status
 
-## State: VERIFIED
+## State: DONE
 
 ## Baseline Results
 - Branch: `slice/S01-renderer-engine`
