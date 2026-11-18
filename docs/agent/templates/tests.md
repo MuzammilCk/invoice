@@ -1,0 +1,6 @@
+- Acceptance criteria AC1 to ACn in Given, When, Then form, with BP pointers
+- Test matrix: each AC mapped to test files and level
+- Fakes and fixtures
+- Edge cases and error states
+- Performance budgets, if any
+- Demo script: numbered steps, each with an expected result

@@ -1,0 +1,5 @@
+- State line: NOT_STARTED, PLANNED, APPROVED, BUILDING, READY_FOR_VERIFY, VERIFIED, VERIFIED_WITH_FIXES, DONE or BLOCKED
+- Baseline results
+- Task checklist with commit hashes and evidence
+- Decisions log, Deviations log, Questions log
+- Handoff, filled at close: provides, usage examples, environment variables, limits, deferred items

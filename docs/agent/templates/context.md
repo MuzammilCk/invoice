@@ -1,0 +1,9 @@
+- Goal in one sentence, and who benefits
+- Blueprint refs (BP x.y list)
+- Distilled requirements: exact rules, fields, limits and copy strings, each with a section pointer
+- Owns: paths, tables, endpoints, routes
+- Depends on, and the fakes to use
+- Provides: contracts and public entry points
+- Not in this slice: an explicit list
+- Decisions: locked items that matter here, and OPEN items with their placeholders
+- Risks and unknowns

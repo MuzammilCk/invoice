@@ -1,0 +1,4 @@
+- Branch name and the baseline commands (lint, type check, test, end to end)
+- Tasks T1 to Tn, each with Goal, Files (inside Owns), Tests first, Steps, Done check, Stop point (yes or no)
+- Order rationale (riskiest first)
+- Completion checklist
