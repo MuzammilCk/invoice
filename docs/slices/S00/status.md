@@ -1,7 +1,7 @@
 # S00 Foundation — Status
 
 ## State
-READY_FOR_VERIFY
+DONE
 
 ## Baseline results
 - Backend: 17 passed (`pytest tests/ -v`), `ruff check app/ tests/` clean
@@ -30,4 +30,64 @@ READY_FOR_VERIFY
 (none)
 
 ## Handoff
-(filled at close)
+
+### What S00 Provides
+
+#### 1. Public Endpoints
+- `GET /health` → `{"status": "ok"}`
+- `POST /auth/login` with `{"pin": "..."}` → authenticates and sets HttpOnly `session` cookie.
+- `POST /auth/logout` → clears `session` cookie.
+- `GET /auth/me` → returns `{"workspace_id": "...", "name": "..."}` or 401.
+- `POST /auth/setup` with `{"pin": "...", "name": "..."}` → sets initial PIN and logs in.
+
+#### 2. Backend Modules & Helpers
+- **DB Session**:
+  ```python
+  from app.db import get_db, SessionLocal, Base
+  # In FastAPI dependency:
+  def my_endpoint(db: Session = Depends(get_db)): ...
+  ```
+- **Standardized Error Handling** (BP 8.2):
+  ```python
+  from app.errors import error_json
+  return error_json(404, "NOT_FOUND", "Invoice not found", field="id")
+  ```
+- **Workspace Model**:
+  ```python
+  from app.models.workspace import Workspace
+  ```
+- **Auth & Session Check**:
+  ```python
+  from app.auth import validate_session
+  workspace_id = validate_session(session_token)
+  ```
+
+#### 3. Web App Shell & Client
+- **API Fetch Helper** (`apps/web/src/api/client.ts`):
+  ```typescript
+  import { apiFetch, ApiException } from '../api/client'
+  const data = await apiFetch<MeResponse>('/auth/me')
+  ```
+- **Route Guard** (`apps/web/src/components/AuthGuard.tsx`):
+  Protects routes and injects workspace info; unauthenticated visits redirect to `/login`.
+- **API Client Generation**:
+  Run `npm run codegen` in `apps/web` to re-export `contracts/openapi.json` and generate TypeScript types into `apps/web/src/api/generated/schema.ts`.
+
+#### 4. Deployment & Operations
+- **Container**: `Dockerfile` (multi-stage: Node 22 build + Python 3.12 runner with SPA serving).
+- **HTTPS Reverse Proxy**: `Caddyfile` with automated TLS (`{$DOMAIN::80}`).
+- **Orchestration**: `docker-compose.yml` mounts persistent SQLite volume at `/app/data`.
+- **Backup & Restore**:
+  - `scripts/backup.sh [db_path]` → Creates atomic snapshot with 14 daily/8 weekly retention.
+  - `scripts/restore.sh <backup_path> [target_db]` → Verifies SQLite integrity before and after restoration.
+
+#### 5. Environment Variables
+- `VTI_DATABASE_URL`: Connection string (default: `sqlite:///data/invoice.db`).
+- `VTI_COOKIE_SECURE`: Set to `"false"` in local dev/tests, `"true"` in production.
+- `VTI_STATIC_DIR`: Path to frontend `dist/` directory for production SPA serving.
+- `DOMAIN`: Target hostname for Caddy TLS certs (default: `:80`).
+
+#### 6. Known Limits & Deferred Items
+- Single workspace per instance (`workspace_id` column present on every table for future multi-tenancy).
+- Rate-limiting is in-memory per workspace instance.
+- CI pipeline deferred to later milestone per owner approval.

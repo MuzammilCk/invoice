@@ -4,7 +4,7 @@
 
 | Slice | Title | Depends on | Status | Branch | Tag | Last verified |
 | --- | --- | --- | --- | --- | --- | --- |
-| S00 | Foundation | none | READY_FOR_VERIFY | slice/S00-foundation | | |
+| S00 | Foundation | none | DONE | slice/S00-foundation | S00-done | 2026-11-18 |
 | S01 | Renderer engine | none | NOT_STARTED | | | |
 | S02 | Perception kernel | none | NOT_STARTED | | | |
 | S03 | Starting UI | S00, S01 | NOT_STARTED | | | |
@@ -18,7 +18,7 @@
 
 ## Contracts
 
-(empty)
+- `contracts/openapi.json`: v0.1.0 (`sha256:489151f4e86db915021dd8b74f0e55ee77eebdbd1554c14e38c4ea0b2ddfeb80`)
 
 ## Decisions
 
