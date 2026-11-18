@@ -7,9 +7,9 @@ APPROVED
 (not yet run — no backend or frontend exists under the new layout yet)
 
 ## Task checklist
-- [ ] T1 — Repo layout and backend skeleton
-- [ ] T2 — PIN auth (backend)
-- [ ] T3 — Frontend shell
+- [x] T1 — Repo layout and backend skeleton (1593573, b66c1b6)
+- [x] T2 — PIN auth (backend) (f1a94d8)
+- [x] T3 — Frontend shell (1a0f701)
 - [ ] T4 — API client generation
 - [ ] T5 — Docker and Caddy deploy
 - [ ] T6 — CI pipeline (DEFERRED — owner said "later")
