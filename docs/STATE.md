@@ -7,7 +7,7 @@
 | S00 | Foundation | none | DONE | slice/S00-foundation | S00-done | 2026-11-18 |
 | S01 | Renderer engine | none | DONE | slice/S01-renderer-engine | S01-done | 2026-11-18 |
 | S02 | Perception kernel | none | DONE | slice/S02-perception-kernel | S02-done | 2026-11-19 |
-| S03 | Starting UI | S00, S01 | NOT_STARTED | | | |
+| S03 | Starting UI | S00, S01 | PLANNED | slice/S03-starting-ui | | |
 | S04 | Invoice core | S00, S01, S03 | NOT_STARTED | | | |
 | S05 | Typed guided fill | S02, S03, S04 | NOT_STARTED | | | |
 | S06 | Review and fix tools | S04, S05 | NOT_STARTED | | | |
