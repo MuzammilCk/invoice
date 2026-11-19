@@ -12,3 +12,8 @@ Ideas and deferred work. Nothing here is built inside a slice.
 - **Expanded Malayalam Vocabulary**: Enrich the Malayalam phonetic dictionary and regional trade terms based on the ~40 actual phone recordings collected during S08 STT bake-off (BP 6.6).
 - **LLM Normalizer Bake-Off**: Benchmark and evaluate an LLM-backed normalizer vs `RuleBasedNormalizer` in M3 / S08 when voice evaluation harness is online (STATE.md decisions).
 - **Multi-field Utterance Segmentation**: Support segmenting compound spoken utterances (e.g. item and quantity in a single breath) during voice fill in S09 (BP 5.3).
+
+## Deferred from S03
+- **Multiple Saved Presets UI Switcher**: Support creating, naming, and actively switching between multiple custom column presets from the Home screen (v1 relies on a single active preset linked via `default_preset_id`, BP 3.2).
+- **SetupPage Test Act Warning Cleanup**: Refactor `apps/web/src/pages/__tests__/SetupPage.test.tsx` to wrap form events in `act(...)` or migrate to `@testing-library/user-event`.
+- **Custom Column Headers / Renaming**: Support overriding column header text per preset (e.g. "Particulars" for "Item") in the UI (contract model supports `labels` dict override).

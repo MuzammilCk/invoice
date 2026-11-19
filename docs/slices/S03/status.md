@@ -50,6 +50,62 @@ VERIFIED
    All buttons and interactive controls satisfy >= 44px minimum touch targets (`min-h-[44px]`, `h-11`, `h-12`). Form elements have explicit label associations with `htmlFor` and `id`. Responsive styling tested at 360px, 768px, and 1280px layouts.
 
 ## Handoff
-- S03 implements the starting UI, column registry, presets, business profile, first-run wizard, and settings.
-- Produces `contracts/columns.py`, `contracts/preset.py`, endpoints `/columns`, `/presets`, `/designs`, `/settings`, `/setup`, and UI pages `/setup`, `/`, `/settings`, `/new/design`, `/new/columns`, `/new/draft-stub`.
-- Ready for S03 verification via `docs/agent/prompts/3-verify-slice.md`. S04 will build invoice core and draft creation.
+### What S03 Provides
+
+1. **Contracts**:
+   - `contracts/columns.py`:
+     - `COLUMN_REGISTRY`: Pool of 8 items (`no`, `item`, `qty`, `unit`, `rate`, `discount`, `tax`, `amount`).
+     - `validate_columns(cols: list[str]) -> tuple[bool, str | None]`: Validates rules (Item and Rate required; Qty and Amount paired; max 6 columns).
+     - `order_columns(cols: list[str]) -> list[str]`: Normalizes column order strictly following the registry order.
+     - `resolve_total_column(cols: list[str]) -> str`: Returns `"amount"` if present, otherwise `"rate"`.
+   - `contracts/preset.py`:
+     - `PresetBase`, `PresetCreate`, `PresetUpdate`, `PresetModel` (with automatic column validation and ordering).
+     - `BusinessProfileBase`, `BusinessProfileCreate`, `BusinessProfileUpdate`, `BusinessProfileModel`.
+   - `contracts/openapi.json`: Exported OpenAPI 3.1.0 specification including all S03 schemas and endpoints.
+
+2. **Endpoints (Services API)**:
+   - `GET /columns`: Returns active V1 columns (or all columns if `?all=true`).
+   - `GET /designs`: Returns available designs metadata.
+   - `GET /designs/{id}/sample`: Returns PNG thumbnail preview rendered using S01 engine.
+   - `GET /presets` & `POST /presets` & `PUT /presets/{id}`: CRUD for column & design presets.
+   - `GET /settings` & `PUT /settings`: Workspace profile, PIN, and default preset inspection/update.
+   - `POST /setup`: First-run atomic setup creating workspace, profile, default preset, and session.
+
+3. **Frontend Routes & Components (`apps/web`)**:
+   - `/setup`: `SetupPage` (4-step onboarding wizard for unconfigured workspaces).
+   - `/`: `HomePage` (Empty state with "Create invoice" button, Settings link, and remembered preset chips).
+   - `/settings`: `SettingsPage` (Profile details, PIN change, voice toggle, preset summary, sign-out).
+   - `/new/design`: `NewDesignPage` (Allows changing the active preset design).
+   - `/new/columns`: `NewColumnsPage` (Allows toggling invoice columns with live validation).
+   - `/new/draft-stub`: `DraftStubPage` (Handoff target for "Create invoice" until S04).
+   - Components in `apps/web/src/features/presets/`:
+     - `ColumnPicker`: Interactive toggle cards for columns with inline rule validation.
+     - `TableHeaderPreview`: Visual preview of the table header matching column choices.
+     - `DesignPicker`: Visual selector for invoice design layouts with live image preview.
+     - `PresetChips`: Displays active design and column badges with "[Change]" navigation links.
+
+### How Downstream Slices (S04 Invoice Core) Use S03
+
+```python
+# In S04 when creating a new invoice draft from workspace's default preset:
+from app.models.business_profile import BusinessProfile
+from app.models.preset import Preset
+
+profile = db.query(BusinessProfile).filter_by(workspace_id=workspace.id).first()
+preset = db.query(Preset).filter_by(id=profile.default_preset_id).first()
+
+# Initialize invoice columns from preset:
+invoice_columns = preset.columns  # e.g. ["no", "item", "qty", "rate", "amount"]
+design_id = preset.design_id      # e.g. "design1"
+```
+
+In the Web UI:
+- S04 replaces the `/new/draft-stub` target with real draft creation (`POST /invoices`) and redirects to `/invoices/{id}`.
+
+### Environment Variables
+- `INVOICE_DB_PATH`: Path to SQLite database (default: `data/invoice.db`).
+
+### Known Limits & Deferred Items
+- Voice capture & audio recording: Deferred to S09 (toggle is stored in profile).
+- Invoice draft creation & lifecycle: Deferred to S04.
+- In-memory session store: Backend process restarts require re-login via PIN.
