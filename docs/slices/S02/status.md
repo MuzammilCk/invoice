@@ -16,7 +16,7 @@
 - [x] T5: Domain & Perception Checks Engine (`services/api/app/perception/checks.py`)
 - [x] T6: Lexicon & Proposal Builder Pipeline [Stop Point: Owner review] (`services/api/app/perception/lexicon.py`, `builder.py`)
 - [x] T7: Fake Perception Kernel (`contracts/fakes/perception.py`)
-- [ ] T8: Demo Script & Comprehensive Case Table Verification (`services/api/app/perception/demo.py`)
+- [x] T8: Demo Script & Comprehensive Case Table Verification (`services/api/app/perception/demo.py`)
 
 ## Decisions Log
 - D1: Use `RuleBasedNormalizer` behind `Normalizer` interface; LLM selection deferred to M3 bake-off (BP 6.3, STATE.md).
