@@ -5,6 +5,7 @@ import { SetupPage } from './pages/SetupPage'
 import { NewDesignPage } from './pages/NewDesignPage'
 import { NewColumnsPage } from './pages/NewColumnsPage'
 import { DraftStubPage } from './pages/DraftStubPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { AuthGuard } from './components/AuthGuard'
 
 export const router = createBrowserRouter([
@@ -15,6 +16,14 @@ export const router = createBrowserRouter([
   {
     path: '/setup',
     element: <SetupPage />,
+  },
+  {
+    path: '/settings',
+    element: (
+      <AuthGuard>
+        {() => <SettingsPage />}
+      </AuthGuard>
+    ),
   },
   {
     path: '/new/design',

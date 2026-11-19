@@ -14,9 +14,9 @@ BUILDING
 - [x] T3: Backend API Endpoints (`/columns`, `/presets`, `/designs`, `/settings`, `/setup`) — `da99daa`
 - [x] T4: Frontend Contracts & Client Codegen (`contracts/openapi.json`, `apps/web/src/features/presets/columns.ts`) — `6abd762`
 - [x] T5: DesignPicker & ColumnPicker Components (`DesignPicker.tsx`, `ColumnPicker.tsx`, `TableHeaderPreview.tsx`, `PresetChips.tsx`) [Stop Point: Owner visual review] — `9661686`
-- [ ] T6: First-Run Setup Wizard (`SetupWizard.tsx`, `/setup`)
-- [ ] T7: Home Screen Adaptation & Change Flows (`HomePage.tsx`, `/new/design`, `/new/columns`)
-- [ ] T8: Settings Screen (`SettingsPage.tsx`, `/settings`)
+- [x] T6: First-Run Setup Wizard (`SetupWizard.tsx`, `/setup`) — `1242000`
+- [x] T7: Home Screen Adaptation & Change Flows (`HomePage.tsx`, `/new/design`, `/new/columns`) — `4c5ab1e`
+- [x] T8: Settings Screen (`SettingsPage.tsx`, `/settings`)
 - [ ] T9: Accessibility, Responsive Polish & Verification (360/768/1280px, 44px targets, full demo script)
 
 ## Decisions Log
