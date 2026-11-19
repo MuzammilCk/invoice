@@ -14,7 +14,7 @@ os.environ["VTI_DATABASE_URL"] = "sqlite:///test.db"
 
 from app.db import Base, get_db
 from app.main import create_app
-from app.models import Workspace  # noqa: F401 — register models
+from app.models import BusinessProfile, Preset, Workspace  # noqa: F401 — register models
 from app.seed import seed_workspace
 
 
