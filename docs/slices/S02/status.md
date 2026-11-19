@@ -1,6 +1,6 @@
 # S02: Perception kernel — Status
 
-## State: BUILDING
+## State: READY_FOR_VERIFY
 
 ## Baseline Results
 - Branch: `slice/S02-perception-kernel`
