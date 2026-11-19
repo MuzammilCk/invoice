@@ -14,7 +14,7 @@
 - [x] T3: Text Normalizer & RapidFuzz Matcher (`services/api/app/perception/normalizer.py`, `matcher.py`)
 - [x] T4: Date Parser & Timezone Handling (`services/api/app/perception/date.py`)
 - [x] T5: Domain & Perception Checks Engine (`services/api/app/perception/checks.py`)
-- [ ] T6: Lexicon & Proposal Builder Pipeline [Stop Point: Owner review] (`services/api/app/perception/lexicon.py`, `builder.py`)
+- [x] T6: Lexicon & Proposal Builder Pipeline [Stop Point: Owner review] (`services/api/app/perception/lexicon.py`, `builder.py`)
 - [ ] T7: Fake Perception Kernel (`contracts/fakes/perception.py`)
 - [ ] T8: Demo Script & Comprehensive Case Table Verification (`services/api/app/perception/demo.py`)
 
