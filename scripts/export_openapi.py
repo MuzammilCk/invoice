@@ -4,7 +4,8 @@ import json
 import sys
 from pathlib import Path
 
-# Add services/api to path so app can be imported
+# Add services/api and repo root to path so app and contracts can be imported
+sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "services" / "api"))
 
 from app.main import app
