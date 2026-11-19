@@ -9,6 +9,11 @@ export default defineConfig({
     proxy: {
       '/auth': 'http://localhost:8000',
       '/health': 'http://localhost:8000',
+      '/setup': 'http://localhost:8000',
+      '/columns': 'http://localhost:8000',
+      '/designs': 'http://localhost:8000',
+      '/presets': 'http://localhost:8000',
+      '/settings': 'http://localhost:8000',
     },
   },
   test: {

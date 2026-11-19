@@ -20,14 +20,29 @@ def create_app() -> FastAPI:
     )
 
     # Error handlers
+    from fastapi.exceptions import RequestValidationError
+
+    from app.errors import validation_exception_handler
+
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
 
     # Routers
     from app.auth.router import router as auth_router
+    from app.routes.columns import router as columns_router
+    from app.routes.designs import router as designs_router
     from app.routes.health import router as health_router
+    from app.routes.presets import router as presets_router
+    from app.routes.settings import router as settings_router
+    from app.routes.setup import router as setup_router
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(columns_router)
+    app.include_router(designs_router)
+    app.include_router(presets_router)
+    app.include_router(settings_router)
+    app.include_router(setup_router)
 
     # Static / SPA serving if static_dir is provided
     import os

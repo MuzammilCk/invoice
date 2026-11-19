@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -19,6 +20,19 @@ def error_json(status: int, code: str, message: str, field: str | None = None) -
     """Build a JSONResponse with the standard error format."""
     body = ErrorResponse(code=code, message=message, field=field)
     return JSONResponse(status_code=status, content=body.model_dump(exclude_none=True))
+
+
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Format Pydantic request validation errors to standard format (BP 8.2)."""
+    errors = exc.errors()
+    msg = errors[0].get("msg", "Invalid input") if errors else "Invalid input"
+    if msg.startswith("Value error, "):
+        msg = msg[len("Value error, "):]
+    loc = errors[0].get("loc", []) if errors else []
+    field = str(loc[-1]) if loc else None
+    return error_json(422, "VALIDATION_ERROR", msg, field=field)
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:

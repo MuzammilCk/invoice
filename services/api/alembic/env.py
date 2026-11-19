@@ -2,12 +2,12 @@
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from alembic import context
 from app.config import settings
 from app.db import Base
-from app.models import Workspace  # noqa: F401 — register models
+from app.models import BusinessProfile, Preset, Workspace  # noqa: F401 — register models
 
 config = context.config
 if config.config_file_name is not None:

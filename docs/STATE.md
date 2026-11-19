@@ -7,7 +7,7 @@
 | S00 | Foundation | none | DONE | slice/S00-foundation | S00-done | 2026-11-18 |
 | S01 | Renderer engine | none | DONE | slice/S01-renderer-engine | S01-done | 2026-11-18 |
 | S02 | Perception kernel | none | DONE | slice/S02-perception-kernel | S02-done | 2026-11-19 |
-| S03 | Starting UI | S00, S01 | PLANNED | slice/S03-starting-ui | | |
+| S03 | Starting UI | S00, S01 | DONE | slice/S03-starting-ui | S03-done | 2026-11-19 |
 | S04 | Invoice core | S00, S01, S03 | NOT_STARTED | | | |
 | S05 | Typed guided fill | S02, S03, S04 | NOT_STARTED | | | |
 | S06 | Review and fix tools | S04, S05 | NOT_STARTED | | | |
@@ -18,11 +18,13 @@
 
 ## Contracts
 
-- `contracts/openapi.json`: v0.1.0 (`sha256:489151f4e86db915021dd8b74f0e55ee77eebdbd1554c14e38c4ea0b2ddfeb80`)
+- `contracts/openapi.json`: v0.1.0 (`sha256:fb157fd178763a122aa9b1af9ad6e58ed12882a46ca2df3c5f540255993b7cbc`)
 - `contracts/render_model.py`: v0.1.0 (`sha256:d57fa68fd54e3007848ce722bece926577b156331ff521a0da1efb2c8dcb1372`)
 - `contracts/fakes/renderer.py`: v0.1.0 (`sha256:6eec860a39ae051a90a60241aa995d943d542a2ddcc6f0f60f7aa5f3314bf64d`)
 - `contracts/proposal.py`: v0.1.0 (`sha256:5575c6476a5c9554f34554b1e89848e6d567a1951b2ffa7036e77dcd3f063366`)
 - `contracts/fakes/perception.py`: v0.1.0 (`sha256:ef06d9e865f6299f9b30b17c20822d3fc00dd9ce9535861c884569424acbfd23`)
+- `contracts/columns.py`: v0.1.0 (`sha256:bdc662dab0828d19e76d2193dbe62f1cd7c65537e6091774c616a355fdc8656f`)
+- `contracts/preset.py`: v0.1.0 (`sha256:f7f9bda8bc5554c0e646f1b63aa3db006eb9fe27e9821a9d63b35a293f8b3253`)
 
 ## Decisions
 
